@@ -1,0 +1,12 @@
+# Blender v2.73 (sub 0) OBJ File: 'pent.blend'
+# www.blender.org
+mtllib pentagon.mtl
+o Cylinder
+v -0.309017 -0.003812 -0.951057
+v 0.809017 -0.003812 -0.587785
+v 0.809017 -0.003812 0.587785
+v -0.309017 -0.003812 0.951056
+v -1.000000 -0.003812 -0.000000
+usemtl None
+s off
+f 2 1 5 4 3
