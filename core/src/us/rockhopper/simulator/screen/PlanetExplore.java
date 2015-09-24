@@ -104,8 +104,16 @@ public class PlanetExplore extends ScreenAdapter {
 				if (button == Buttons.RIGHT) {
 					selected = getObject(screenX, screenY);
 					if (selected != -1) {
+						// Get the tile selected
+						Tile t = tiles.get(selected);
+						t.setColor(Color.BLUE);
+
+						// Update the rendering
 						for (Chunk ch : chunks) {
-							ch.draw();
+							if (ch.tiles.contains(t)) {
+								ch.draw();
+								break;
+							}
 						}
 					}
 					return true;
