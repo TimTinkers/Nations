@@ -4,20 +4,22 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input.Keys;
 import com.badlogic.gdx.InputAdapter;
 import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.ScreenAdapter;
-import com.badlogic.gdx.Input.Keys;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.PerspectiveCamera;
 import com.badlogic.gdx.graphics.VertexAttributes.Usage;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.g3d.Environment;
 import com.badlogic.gdx.graphics.g3d.Material;
 import com.badlogic.gdx.graphics.g3d.Model;
 import com.badlogic.gdx.graphics.g3d.ModelBatch;
 import com.badlogic.gdx.graphics.g3d.ModelInstance;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
+import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
 import com.badlogic.gdx.graphics.g3d.utils.MeshPartBuilder;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.math.Vector3;
@@ -39,6 +41,7 @@ public class SurfaceExplore extends ScreenAdapter {
 	protected StringBuilder stringBuilder;
 
 	private PerspectiveCamera camera;
+	private Environment environment;
 	private List<ModelInstance> cubes = new ArrayList<ModelInstance>();
 
 	ModelBatch modelBatch = new ModelBatch();
@@ -47,15 +50,16 @@ public class SurfaceExplore extends ScreenAdapter {
 		for (int i = 0; i < world.getMap().getMap().size; i++) {
 			for (int j = 0; j < world.getMap().getMap().get(i).length(); j++) {
 				ModelInstance c = new ModelInstance(cube);
-				c.transform.translate((j - 1) * 2f, i * 2f, -2);
+				c.transform.translate((j) * 2f, -2, i * 2f);
 				cubes.add(c);
 			}
 		}
 
 		for (int i = 0; i < world.getWalls().size; i++) {
 			ModelInstance c = new ModelInstance(cube);
-			c.transform.translate(world.getWalls().get(i).centrePosX * 2f, world.getWalls().get(i).centrePosY * 2f, 0);
-			c.transform.scale(world.getWalls().get(i).width, world.getWalls().get(i).height, 1.0f);
+			c.transform.translate(world.getWalls().get(i).center.x * 2f, 0, world.getWalls().get(i).center.y * 2f);
+			c.transform.scale(world.getWalls().get(i).width, world.getWalls().get(i).height,
+					world.getWalls().get(i).width);
 			cubes.add(c);
 		}
 	}
@@ -65,14 +69,15 @@ public class SurfaceExplore extends ScreenAdapter {
 		world = new World(planet);
 		camera = new PerspectiveCamera(70, 6f, 4f);
 		camera.near = 0.01f;
-		camera.direction.set(0, 2, -1);
+		// camera.direction.set(0, 2, -1);
 	}
 
 	private int mouseX = 0;
 	private int mouseY = 0;
 	private float rotSpeed = 0.5f;
-	private float camRotation = 0.0f;
+	private float camYaw = 0.0f;
 	private boolean cursor = false;
+	float camPitch = 0.0f;
 
 	@Override
 	public void render(float delta) {
@@ -81,10 +86,9 @@ public class SurfaceExplore extends ScreenAdapter {
 
 		// Render play area
 		// Position camera on player
-		camera.position.set(world.getPlayer().getCentrePos().x * 2f, (world.getPlayer().getCentrePos().y * 2f) - 0,
-				0.75f);
-		// camera.rotate(world.getPlayer().getRotation(), 0, 0, 1);
-		world.getPlayer().setRotation(camRotation);
+		camera.position.set(world.getPlayer().getCentrePos().x * 2f, 0.75f,
+				(world.getPlayer().getCentrePos().z * 2f) - 0);
+		world.getPlayer().setRotation(camYaw);
 		camera.update();
 		// camera.rotate(-world.getPlayer().getRotation(), 0, 0, 1);
 
@@ -93,14 +97,15 @@ public class SurfaceExplore extends ScreenAdapter {
 
 		modelBatch.begin(camera);
 		for (ModelInstance m : cubes) {
-			modelBatch.render(m);
+			modelBatch.render(m, environment);
 		}
 		modelBatch.end();
 
 		// Draw diagnostics
 		stringBuilder.setLength(0);
 		stringBuilder.append(" FPS: ").append(Gdx.graphics.getFramesPerSecond());
-		stringBuilder.append(" rot: ").append(camRotation);
+		stringBuilder.append(" yaw: ").append(camYaw);
+		stringBuilder.append(" pitch: ").append(camPitch);
 		label.setText(stringBuilder);
 		stage.draw();
 	}
@@ -121,6 +126,12 @@ public class SurfaceExplore extends ScreenAdapter {
 		stage.addActor(label);
 		stringBuilder = new StringBuilder();
 
+		environment = new Environment();
+		environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.4f, 0.4f, 0.4f, 1f));
+		environment.add(new DirectionalLight().set(0.8f, 0.8f, 0.8f, -1f, -0.8f, -0.2f));
+
+		camera.rotate(world.getPlayer().getRotation(), 0, 1, 0);
+
 		// Initialize input processing
 		InputMultiplexer multiplexer = new InputMultiplexer();
 		multiplexer.addProcessor(new InputAdapter() {
@@ -129,40 +140,49 @@ public class SurfaceExplore extends ScreenAdapter {
 				int magX = Math.abs(mouseX - screenX);
 				int magY = Math.abs(mouseY - screenY);
 
-				// TODO make Y our up axis
-
 				if (mouseX > screenX) {
 					float angle = 1 * magX * rotSpeed;
-					camera.rotate(Vector3.Z, angle);
-					camRotation += 1 * magX * rotSpeed;
+					camera.rotate(Vector3.Y, angle);
+					camYaw += angle;
 					camera.update();
 				}
 
 				if (mouseX < screenX) {
 					float angle = -1 * magX * rotSpeed;
-					camera.rotate(Vector3.Z, angle);
-					camRotation += angle;
+					camera.rotate(Vector3.Y, angle);
+					camYaw += angle;
 					camera.update();
 				}
 
 				if (mouseY < screenY) {
-					if (camera.direction.z > -1.57) {
+					if (camera.up.y >= 0) {
 						float angle = -1 * magY * rotSpeed;
-						camera.rotate(camera.direction.cpy().crs(Vector3.Z), angle);
+						camPitch += angle;
+						if (camPitch < -90) {
+							camPitch -= angle;
+						} else {
+							camera.rotate(camera.direction.cpy().crs(Vector3.Y), angle);
+						}
 					}
 					camera.update();
 				}
 
 				if (mouseY > screenY) {
-					if (camera.direction.z < 1.57) {
+					if (camera.up.y >= 0) {
 						float angle = 1 * magY * rotSpeed;
-						camera.rotate(camera.direction.cpy().crs(Vector3.Z), angle);
+						camPitch += angle;
+						if (camPitch >= 90) {
+							camPitch -= angle;
+						} else {
+							camera.rotate(camera.direction.cpy().crs(Vector3.Y), angle);
+						}
 					}
 					camera.update();
 				}
 
 				mouseX = screenX;
 				mouseY = screenY;
+				camYaw = camYaw % 360;
 
 				return false;
 			}

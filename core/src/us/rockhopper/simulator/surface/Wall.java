@@ -1,19 +1,20 @@
 package us.rockhopper.simulator.surface;
 
-import com.badlogic.gdx.math.Rectangle;
+import com.badlogic.gdx.math.Vector3;
 
 public class Wall {
-	public float centrePosX;
-	public float centrePosY;
+	public Vector3 center;
 	public float width;
 	public float height;
-	public Rectangle bounds;
+	
+	public HexBounds bounds;
+	
+	//public Rectangle bounds;
 
-	public Wall(float centrePosX, float centrePosY, float width, float height) {
-		this.centrePosX = centrePosX;
-		this.centrePosY = centrePosY;
+	public Wall(Vector3 center, float width, float height) {
+		this.center = center;
 		this.width = width;
 		this.height = height;
-		bounds = new Rectangle(centrePosX - width / 2, centrePosY - height / 2, width, height);
+		bounds = new HexBounds(center, width, height);
 	}
 }

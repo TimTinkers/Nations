@@ -3,6 +3,7 @@ package us.rockhopper.simulator.surface;
 import com.badlogic.gdx.Application.ApplicationType;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
+import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.Array;
 
 import us.rockhopper.simulator.Planet;
@@ -25,11 +26,11 @@ public class World {
 			for (int x = 0; x < map.getMap().get(y).length(); x++) {
 				if (map.getTile(x, y).equals("S")) {
 					// Set start position
-					player.getCentrePos().set(x, map.getMap().size - y);
+					player.getCentrePos().set(x, 0, map.getMap().size - y);
 				}
 				if (map.getTile(x, y).equals("W")) {
 					// Generate walls
-					walls.add(new Wall(x, map.getMap().size - y, 1f, 1f));
+					walls.add(new Wall(new Vector3(x, map.getMap().size - y, 0), 1f, 1f));
 				}
 			}
 		}
@@ -43,11 +44,9 @@ public class World {
 	// object, false if collision with non-blocking object
 	public boolean collision() {
 		for (int i = 0; i < walls.size; i++) {
-			if ((walls.get(i).bounds.contains(player.getHitboxFrontRight().x, player.getHitboxFrontRight().y))
-					|| (walls.get(i).bounds.contains(player.getHitboxBackRight().x, player.getHitboxBackRight().y))
-					|| (walls.get(i).bounds.contains(player.getHitboxBackLeft().x, player.getHitboxBackLeft().y))
-					|| (walls.get(i).bounds.contains(player.getHitboxFrontLeft().x, player.getHitboxFrontLeft().y)))
+			if (walls.get(i).bounds.contains(player.getHitBox())) {
 				return true;
+			}
 		}
 		return false;
 	}
