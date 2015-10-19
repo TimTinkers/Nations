@@ -7,10 +7,10 @@ public class Player {
 	private World world;
 
 	// Character dimensions
-	private float width = 0.5f;
-	private float height = 1f;
-	private float depth = 0.3f;
-	private Vector3 centrePos = new Vector3(0.0f, 0.0f, 0.0f);
+	private float width = 1f;
+	private float height = 2f;
+	private float depth = 1f;
+	private Vector3 centrePos = new Vector3(0.0f, 0.5f, 0.0f);
 
 	private Hitbox hitbox = new Hitbox(centrePos, width, height, depth);
 
@@ -93,6 +93,7 @@ public class Player {
 	}
 
 	public Vector3 getCentrePos() {
+		// System.out.println("get: " + centrePos.y);
 		return centrePos;
 	}
 
@@ -116,6 +117,10 @@ public class Player {
 		return width;
 	}
 
+	public float getHeight() {
+		return height;
+	}
+	
 	public float getDepth() {
 		return depth;
 	}

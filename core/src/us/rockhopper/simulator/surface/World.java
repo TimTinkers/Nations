@@ -22,15 +22,23 @@ public class World {
 	private void generateLevel(int levelNumber) {
 		map.load("Level" + levelNumber + ".map");
 		walls.clear();
+		// Create floor layer
+		for (int y = 0; y < map.getMap().size; y++) {
+			for (int x = 0; x < map.getMap().get(y).length(); x++) {
+				walls.add(new Wall(new Vector3(x, -1, map.getMap().size - y), 1f, 1f));
+			}
+		}
+
+		// Create next layer
 		for (int y = 0; y < map.getMap().size; y++) {
 			for (int x = 0; x < map.getMap().get(y).length(); x++) {
 				if (map.getTile(x, y).equals("S")) {
 					// Set start position
-					player.getCentrePos().set(x, 0, map.getMap().size - y);
+					player.getCentrePos().set(x, 0.5f, map.getMap().size - y);
 				}
 				if (map.getTile(x, y).equals("W")) {
 					// Generate walls
-					walls.add(new Wall(new Vector3(x, map.getMap().size - y, 0), 1f, 1f));
+					walls.add(new Wall(new Vector3(x, 0, map.getMap().size - y), 1f, 1f));
 				}
 			}
 		}

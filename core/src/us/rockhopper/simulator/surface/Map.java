@@ -11,10 +11,10 @@ public class Map {
 		map = new Array<String>();
 
 		map.add("WWWWWWWWWWWW");
-		map.add("W S        W");
-		map.add("W      W   W");
 		map.add("W          W");
-		map.add("W    W     W");
+		map.add("W    S     W");
+		map.add("W          W");
+		map.add("W          W");
 		map.add("W          W");
 		map.add("WWWWWWWWWWWW");
 

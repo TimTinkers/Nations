@@ -1,5 +1,6 @@
 package us.rockhopper.simulator.surface;
 
+import com.badlogic.gdx.graphics.g3d.ModelInstance;
 import com.badlogic.gdx.math.Vector3;
 
 public class Wall {
@@ -8,6 +9,7 @@ public class Wall {
 	public float height;
 	
 	public HexBounds bounds;
+	public ModelInstance rendered;
 	
 	//public Rectangle bounds;
 

@@ -19,19 +19,19 @@ public class HexBounds {
 
 	// TODO: can use simple float tuples instead of Vector3's in order to save
 	// memory
-	Vector3 center;
-	Vector3 t0;
-	Vector3 t1;
-	Vector3 t2;
-	Vector3 t3;
-	Vector3 t4;
-	Vector3 t5;
-	Vector3 b0;
-	Vector3 b1;
-	Vector3 b2;
-	Vector3 b3;
-	Vector3 b4;
-	Vector3 b5;
+	public Vector3 center;
+	public Vector3 t0;
+	public Vector3 t1;
+	public Vector3 t2;
+	public Vector3 t3;
+	public Vector3 t4;
+	public Vector3 t5;
+	public Vector3 b0;
+	public Vector3 b1;
+	public Vector3 b2;
+	public Vector3 b3;
+	public Vector3 b4;
+	public Vector3 b5;
 
 	float xCon = 0.5f;
 	float zCon = (float) (Math.sqrt(3) / 2);
@@ -79,23 +79,27 @@ public class HexBounds {
 	// TODO: generalize this code for potentially rotated hexes
 	// Right now it assumes hexes which are static in their positions
 	public boolean contains(Vector3 point) {
-		System.out.println(point.toString());
+		//System.out.println(center.toString() + " " + point.toString());
 		// Rough check of the bounding cube
-		
+
 		// TODO: for some reason these y's are never in bounds.
-		
+
 		if (point.y > t0.y || point.y < b0.y) {
-			System.out.println("y: " + t0.y);
+			//System.out.println("y: " + t0.y);
 			return false;
 		}
-		System.out.println("Y in!");
-		// if (point.x < t0.x || point.x > t3.x) {
-		// return false;
-		// }
-		// if (point.z > t1.z || point.z < t5.z) {
-		// return false;
-		// }
+		//System.out.println("Y in!");
+		if (point.x < t0.x || point.x > t3.x) {
+			return false;
+		}
+		if (point.z > t1.z || point.z < t5.z) {
+			return false;
+		}
 
+		// This shouldn't run.
+		// TODO: finish debugging this--it looks like it's giving some impossible output...
+		System.out.println(t0.x + ", " + t0.y + ", " + t0.z + " Oops!");
+		
 		// Finer check to rule out the corners
 		// Translate into hexagon space
 		float _hori = 0.25f * width;

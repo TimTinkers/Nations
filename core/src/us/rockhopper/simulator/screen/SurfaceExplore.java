@@ -1,8 +1,5 @@
 package us.rockhopper.simulator.screen;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input.Keys;
 import com.badlogic.gdx.InputAdapter;
@@ -27,13 +24,15 @@ import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 
 import us.rockhopper.simulator.Planet;
+import us.rockhopper.simulator.surface.HexBounds;
+import us.rockhopper.simulator.surface.Wall;
 import us.rockhopper.simulator.surface.World;
 
 public class SurfaceExplore extends ScreenAdapter {
 
 	Planet planet;
 	private World world;
-	Model cube;
+	//Model cube;
 
 	protected Stage stage;
 	protected Label label;
@@ -42,25 +41,73 @@ public class SurfaceExplore extends ScreenAdapter {
 
 	private PerspectiveCamera camera;
 	private Environment environment;
-	private List<ModelInstance> cubes = new ArrayList<ModelInstance>();
+	// private List<ModelInstance> hexes = new ArrayList<ModelInstance>();
 
 	ModelBatch modelBatch = new ModelBatch();
 
-	private void setupPlayArea() {
-		for (int i = 0; i < world.getMap().getMap().size; i++) {
-			for (int j = 0; j < world.getMap().getMap().get(i).length(); j++) {
-				ModelInstance c = new ModelInstance(cube);
-				c.transform.translate((j) * 2f, -2, i * 2f);
-				cubes.add(c);
-			}
-		}
+	private void setupWallRenderables() {
+
+		// for (int i = 0; i < world.getMap().getMap().size; i++) {
+		// for (int j = 0; j < world.getMap().getMap().get(i).length(); j++) {
+		//
+		// ModelInstance c = new ModelInstance(cube);
+		// c.transform.translate((j) * 2f, -2, i * 2f);
+		//
+		// // hexes.add(c);
+		// }
+		// }
 
 		for (int i = 0; i < world.getWalls().size; i++) {
-			ModelInstance c = new ModelInstance(cube);
-			c.transform.translate(world.getWalls().get(i).center.x * 2f, 0, world.getWalls().get(i).center.y * 2f);
-			c.transform.scale(world.getWalls().get(i).width, world.getWalls().get(i).height,
-					world.getWalls().get(i).width);
-			cubes.add(c);
+			// ModelInstance c = new ModelInstance(cube);
+			// c.transform.translate(world.getWalls().get(i).center.x * 2f, 0,
+			// world.getWalls().get(i).center.z * 2f);
+			// c.transform.scale(world.getWalls().get(i).width,
+			// world.getWalls().get(i).height,
+			// world.getWalls().get(i).width);
+
+			Wall wall = world.getWalls().get(i);
+			HexBounds bounds = wall.bounds;
+			
+			// Create our renderable
+			ModelBuilder mb = new ModelBuilder();
+			mb.begin();
+			MeshPartBuilder mbp = mb.part("cube", GL20.GL_TRIANGLES, Usage.Position | Usage.Normal,
+					new Material(ColorAttribute.createDiffuse(Color.PINK)));
+			
+			// Top
+			mbp.triangle(bounds.t0, bounds.t1, bounds.t5);
+			mbp.triangle(bounds.t1, bounds.t2, bounds.t5);
+			mbp.triangle(bounds.t2, bounds.t4, bounds.t5);
+			mbp.triangle(bounds.t2, bounds.t3, bounds.t4);
+			
+			// Sides
+			mbp.triangle(bounds.t0, bounds.t5, bounds.b0);
+			mbp.triangle(bounds.t5, bounds.b5, bounds.b0);
+			mbp.triangle(bounds.t5, bounds.t4, bounds.b5);
+			mbp.triangle(bounds.t4, bounds.b4, bounds.b5);
+			mbp.triangle(bounds.t4, bounds.t3, bounds.b4);
+			mbp.triangle(bounds.t3, bounds.b3, bounds.b4);
+			mbp.triangle(bounds.t3, bounds.t2, bounds.b3);
+			mbp.triangle(bounds.t2, bounds.b2, bounds.b3);
+			mbp.triangle(bounds.t2, bounds.t1, bounds.b2);
+			mbp.triangle(bounds.t1, bounds.b1, bounds.b2);
+			mbp.triangle(bounds.t1, bounds.t0, bounds.b1);
+			mbp.triangle(bounds.t0, bounds.b0, bounds.b1);
+			
+			// Bottom
+			
+			// mbp.box(0.3f, 0.3f, 0.3f);
+			
+			Model mod = mb.end();
+			ModelInstance h = new ModelInstance(mod);
+			h.transform.translate(world.getWalls().get(i).center.x, world.getWalls().get(i).center.y,
+					world.getWalls().get(i).center.z);
+			// h.transform.scale(world.getWalls().get(i).width,
+			// world.getWalls().get(i).height,
+			// world.getWalls().get(i).width);
+			wall.rendered = h;
+
+			// hexes.add(c);
 		}
 	}
 
@@ -86,8 +133,9 @@ public class SurfaceExplore extends ScreenAdapter {
 
 		// Render play area
 		// Position camera on player
-		camera.position.set(world.getPlayer().getCentrePos().x * 2f, 0.75f,
-				(world.getPlayer().getCentrePos().z * 2f) - 0);
+		//System.out.println("y: " + world.getPlayer().getCentrePos().y);
+		camera.position.set(world.getPlayer().getCentrePos().x, world.getPlayer().getCentrePos().y,
+				world.getPlayer().getCentrePos().z);
 		world.getPlayer().setRotation(camYaw);
 		camera.update();
 		// camera.rotate(-world.getPlayer().getRotation(), 0, 0, 1);
@@ -96,9 +144,35 @@ public class SurfaceExplore extends ScreenAdapter {
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
 
 		modelBatch.begin(camera);
-		for (ModelInstance m : cubes) {
-			modelBatch.render(m, environment);
+		// Render hexels
+		for (Wall w : world.getWalls()) {
+			modelBatch.render(w.rendered, environment);
 		}
+
+		// Render hitbox
+		ModelBuilder mb = new ModelBuilder();
+		mb.begin();
+		MeshPartBuilder mbp = mb.part("cube", GL20.GL_LINES, Usage.Position | Usage.Normal,
+				new Material(ColorAttribute.createDiffuse(Color.RED)));
+		
+		Vector3 hitboxFrontBotRight = world.getPlayer().getHitBox().hitboxFrontBotRight;
+		Vector3 hitboxBackBotRight = world.getPlayer().getHitBox().hitboxBackBotRight;
+		Vector3 hitboxBackBotLeft = world.getPlayer().getHitBox().hitboxBackBotLeft;
+		Vector3 hitboxFrontBotLeft = world.getPlayer().getHitBox().hitboxFrontBotLeft;
+		
+		mbp.line(hitboxFrontBotRight, hitboxBackBotRight);
+		mbp.line(hitboxBackBotRight, hitboxBackBotLeft);
+		mbp.line(hitboxBackBotLeft, hitboxFrontBotLeft);
+		mbp.line(hitboxFrontBotLeft, hitboxFrontBotRight);
+		
+		Model mod = mb.end();
+		ModelInstance rendered = new ModelInstance(mod);
+		
+		modelBatch.render(rendered);
+		
+		// for (ModelInstance m : hexes) {
+		// modelBatch.render(m, environment);
+		// }
 		modelBatch.end();
 
 		// Draw diagnostics
@@ -198,16 +272,8 @@ public class SurfaceExplore extends ScreenAdapter {
 		});
 		Gdx.input.setInputProcessor(multiplexer);
 
-		// Create our cube
-		ModelBuilder mb = new ModelBuilder();
-		mb.begin();
-		MeshPartBuilder mbp = mb.part("cube", GL20.GL_TRIANGLES, Usage.Position | Usage.Normal,
-				new Material(ColorAttribute.createDiffuse(Color.PINK)));
-		mbp.box(1, 1, 1);
-		cube = mb.end();
-
 		// Setup play area
-		setupPlayArea();
+		setupWallRenderables();
 	}
 
 	@Override
