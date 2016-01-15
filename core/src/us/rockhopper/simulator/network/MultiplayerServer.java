@@ -4,13 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-
-import us.rockhopper.simulator.Planet;
-import us.rockhopper.simulator.Planet.Tile;
-import us.rockhopper.simulator.network.Packet.Packet0TileChange;
-import us.rockhopper.simulator.network.Packet.Packet1ScoreUpdate;
-import us.rockhopper.simulator.network.Packet.Packet4Ready;
-import us.rockhopper.simulator.network.Packet.Packet5GameStart;
+import java.util.Random;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
@@ -20,15 +14,21 @@ import com.esotericsoftware.kryonet.Listener;
 import com.esotericsoftware.kryonet.Server;
 import com.esotericsoftware.minlog.Log;
 
+import us.rockhopper.simulator.Planet;
+import us.rockhopper.simulator.Planet.Tile;
+import us.rockhopper.simulator.network.Packet.Packet0TileChange;
+import us.rockhopper.simulator.network.Packet.Packet1ScoreUpdate;
+import us.rockhopper.simulator.network.Packet.Packet4Ready;
+import us.rockhopper.simulator.network.Packet.Packet5GameStart;
+
 public class MultiplayerServer extends Listener {
 	private Server server;
 	private HashMap<String, Boolean> players;
 	private Planet planet;
 	private int attrition;
 
-	Color colors[] = { Color.BLUE, Color.GREEN, Color.DARK_GRAY, Color.RED,
-			Color.CYAN, Color.WHITE, Color.YELLOW, Color.ORANGE, Color.GRAY,
-			Color.OLIVE, Color.PINK, Color.LIGHT_GRAY };
+	Color colors[] = { Color.BLUE, Color.GREEN, Color.DARK_GRAY, Color.RED, Color.CYAN, Color.WHITE, Color.YELLOW,
+			Color.ORANGE, Color.GRAY, Color.OLIVE, Color.PINK, Color.LIGHT_GRAY };
 
 	List<String> turns = new ArrayList<String>();
 	HashMap<Tile, String> tileControl = new HashMap<Tile, String>();
@@ -46,6 +46,20 @@ public class MultiplayerServer extends Listener {
 		Log.set(Log.LEVEL_DEBUG);
 		server = new Server();
 		this.registerPackets();
+
+		Random random = new Random();
+
+		// Randomly block a lot of tiles.
+		// int blocked = planet.tiles.size() / 3;
+		// while (blocked > 0) {
+		// int rID = random.nextInt(planet.tiles.size());
+		// tileControl.put(planet.tiles.get(rID), "HOLE");
+		// Packet0TileChange tc = new Packet0TileChange();
+		// tc.playerID = "HOLE";
+		// tc.tileID = rID;
+		// server.sendToAllTCP(tc);
+		// blocked--;
+		// }
 
 		// Server listening on its own thread.
 		server.addListener(new Listener.QueuedListener(this) {
@@ -113,33 +127,26 @@ public class MultiplayerServer extends Listener {
 	public void received(Connection c, Object o) {
 		if (o instanceof Packet0TileChange) {
 			Packet0TileChange player = ((Packet0TileChange) o);
-			System.out.println("[SERVER] Player " + player.playerID
-					+ " goes for tile " + player.tileID + "...");
+			System.out.println("[SERVER] Player " + player.playerID + " goes for tile " + player.tileID + "...");
 
 			// Check if a tile can be placed here
-			if (turns.get(turn).equals(player.playerID)
-					&& !tileControl.containsKey(player.tileID)) {
-				tileControl.put(planet.tiles.get(player.tileID),
-						player.playerID);
+			// TODO: players able to override other tiles? FIXXX
+			if (turns.get(turn).equals(player.playerID) && !tileControl.containsKey(player.tileID)) {
+				tileControl.put(planet.tiles.get(player.tileID), player.playerID);
 
 				// Check for kills on nearby tiles
 				ArrayList<Tile> dead = new ArrayList<Tile>();
-				for (Tile adjacent : planet.adjacencies.get(planet.tiles
-						.get(player.tileID))) {
+				for (Tile adjacent : planet.adjacencies.get(planet.tiles.get(player.tileID))) {
 					int localAttrition = 0;
 					for (Tile adjacentOther : planet.adjacencies.get(adjacent)) {
 						if (tileControl.get(adjacentOther) != null
-								&& !tileControl.get(adjacentOther).equals(
-										tileControl.get(adjacent))) {
+								&& !tileControl.get(adjacentOther).equals(tileControl.get(adjacent))) {
 							localAttrition++;
 						}
 					}
-					if (tileControl.containsKey(adjacent)
-							&& localAttrition >= attrition
-							&& !dead.contains(adjacent)) {
+					if (tileControl.containsKey(adjacent) && localAttrition >= attrition && !dead.contains(adjacent)) {
 						dead.add(adjacent);
-						scores.put(player.playerID,
-								scores.get(player.playerID) + 1);
+						scores.put(player.playerID, scores.get(player.playerID) + 1);
 					}
 				}
 
@@ -166,10 +173,8 @@ public class MultiplayerServer extends Listener {
 				// Check if this tile dies too
 				int localAttrition = 0;
 				boolean diesToo = false;
-				for (Tile t : planet.adjacencies.get(planet.tiles
-						.get(player.tileID))) {
-					if (tileControl.get(t) != null
-							&& !tileControl.get(t).equals(player.playerID)) {
+				for (Tile t : planet.adjacencies.get(planet.tiles.get(player.tileID))) {
+					if (tileControl.get(t) != null && !tileControl.get(t).equals(player.playerID)) {
 						localAttrition++;
 					}
 				}
@@ -202,8 +207,7 @@ public class MultiplayerServer extends Listener {
 
 			// If this is a player just entering the lobby
 			if (!players.keySet().contains(packet.name)) {
-				System.out.println("[SERVER] " + packet.name
-						+ " is joining the lobby.");
+				System.out.println("[SERVER] " + packet.name + " is joining the lobby.");
 
 				// TODO: compensate for leaving the lobby
 				turns.add(packet.name);
@@ -211,8 +215,7 @@ public class MultiplayerServer extends Listener {
 				players.put(packet.name, false);
 				server.sendToAllExceptTCP(c.getID(), packet);
 
-				System.out.println("[SERVER] Getting " + packet.name
-						+ " up to speed.");
+				System.out.println("[SERVER] Getting " + packet.name + " up to speed.");
 				for (String playerOtherName : players.keySet()) {
 					Packet4Ready playerOther = new Packet4Ready();
 					playerOther.name = playerOtherName;
@@ -220,8 +223,7 @@ public class MultiplayerServer extends Listener {
 					server.sendToTCP(c.getID(), playerOther);
 				}
 			} else {
-				System.out.println("[SERVER] " + packet.name + " is ready "
-						+ packet.ready + ".");
+				System.out.println("[SERVER] " + packet.name + " is ready " + packet.ready + ".");
 				players.put(packet.name, packet.ready);
 				server.sendToAllExceptTCP(c.getID(), o);
 			}

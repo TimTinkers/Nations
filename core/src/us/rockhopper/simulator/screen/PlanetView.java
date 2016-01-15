@@ -43,6 +43,7 @@ public class PlanetView extends ScreenAdapter {
 		this.adjacencies = planet.adjacencies;
 		this.chunks = planet.chunks;
 		this.client = client;
+		this.planet = planet;
 	}
 
 	private final int MINIMUM_CHUNK_SIZE = 200;
@@ -51,6 +52,8 @@ public class PlanetView extends ScreenAdapter {
 	public CameraInputController camController;
 	public PerspectiveCamera cam;
 	public ModelBatch modelBatch;
+
+	Planet planet;
 
 	public List<Tile> tiles = new ArrayList<Tile>();
 	public List<Chunk> chunks = new ArrayList<Chunk>();
@@ -66,11 +69,11 @@ public class PlanetView extends ScreenAdapter {
 	protected StringBuilder stringBuilder;
 
 	private int selected = -1;
+	private int activeTile = -1;
 
 	Random random = new Random();
-	Color colors[] = { Color.BLUE, Color.GREEN, Color.PINK, Color.RED,
-			Color.CYAN, Color.WHITE, Color.YELLOW, Color.ORANGE, Color.GRAY,
-			Color.OLIVE, Color.DARK_GRAY, Color.LIGHT_GRAY };
+	Color colors[] = { Color.BLUE, Color.GREEN, Color.PINK, Color.RED, Color.CYAN, Color.WHITE, Color.YELLOW,
+			Color.ORANGE, Color.GRAY, Color.OLIVE, Color.DARK_GRAY, Color.LIGHT_GRAY };
 
 	@Override
 	public void show() {
@@ -81,15 +84,12 @@ public class PlanetView extends ScreenAdapter {
 		stringBuilder = new StringBuilder();
 
 		environment = new Environment();
-		environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.4f,
-				0.4f, 0.4f, 1f));
-		environment.add(new DirectionalLight().set(0.8f, 0.8f, 0.8f, -1f,
-				-0.8f, -0.2f));
+		environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.4f, 0.4f, 0.4f, 1f));
+		environment.add(new DirectionalLight().set(0.8f, 0.8f, 0.8f, -1f, -0.8f, -0.2f));
 
 		modelBatch = new ModelBatch();
 
-		cam = new PerspectiveCamera(67, Gdx.graphics.getWidth(),
-				Gdx.graphics.getHeight());
+		cam = new PerspectiveCamera(67, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 		cam.position.set(10f, 10f, 10f);
 		cam.lookAt(0, 0, 0);
 		cam.near = 1f;
@@ -103,15 +103,12 @@ public class PlanetView extends ScreenAdapter {
 		multiplexer.addProcessor(new InputAdapter() {
 
 			@Override
-			public boolean touchDown(int screenX, int screenY, int pointer,
-					int button) {
+			public boolean touchDown(int screenX, int screenY, int pointer, int button) {
 				if (button == Buttons.RIGHT) {
 					selected = getObject(screenX, screenY);
 					if (selected != -1) {
 						client.sendTile(client.user, selected);
-						for (Chunk ch : chunks) {
-							ch.draw();
-						}
+						getChunkFromTileID(selected).draw();
 					}
 					return true;
 				} else {
@@ -119,18 +116,57 @@ public class PlanetView extends ScreenAdapter {
 				}
 			}
 
-			// @Override
-			// public boolean keyDown(int keycode) {
-			// if (keycode == Keys.C) {
-			// partitionColor();
-			// drawChunks();
-			// }
-			// if (keycode == Keys.F) {
-			// randomize();
-			// drawChunks();
-			// }
-			// return true;
-			// }
+			@Override
+			public boolean touchDragged(int x, int y, int pointer) {
+				selected = getObject(x, y);
+				if (selected != -1 && selected != activeTile) {
+
+					// Add select color
+					Tile t = planet.tiles.get(selected);
+					for (int i = 0; i < adjacencies.get(t).size(); ++i) {
+						planet.edges.get(t.edges[i]).setColor(Color.YELLOW);
+					}
+					getChunkFromTileID(selected).draw();
+
+					if (activeTile != -1) {
+						// Remove previous select color
+						Tile p = planet.tiles.get(activeTile);
+						for (int i = 0; i < adjacencies.get(p).size(); ++i) {
+							planet.edges.get(p.edges[i]).setColor(Color.BLACK);
+						}
+						getChunkFromTileID(activeTile).draw();
+					}
+
+					activeTile = selected;
+				}
+				return false;
+			}
+
+			@Override
+			public boolean mouseMoved(int x, int y) {
+				selected = getObject(x, y);
+				if (selected != -1 && selected != activeTile) {
+
+					// Add select color
+					Tile t = planet.tiles.get(selected);
+					for (int i = 0; i < adjacencies.get(t).size(); ++i) {
+						planet.edges.get(t.edges[i]).setColor(Color.YELLOW);
+					}
+					getChunkFromTileID(selected).draw();
+
+					if (activeTile != -1) {
+						// Remove previous select color
+						Tile p = planet.tiles.get(activeTile);
+						for (int i = 0; i < adjacencies.get(p).size(); ++i) {
+							planet.edges.get(p.edges[i]).setColor(Color.BLACK);
+						}
+						getChunkFromTileID(activeTile).draw();
+					}
+
+					activeTile = selected;
+				}
+				return false;
+			}
 		});
 		multiplexer.addProcessor(camController);
 		Gdx.input.setInputProcessor(multiplexer);
@@ -148,14 +184,14 @@ public class PlanetView extends ScreenAdapter {
 
 					if (name == null || name.equals("SERVER")) {
 						tiles.get(packet.tileID).setColor(Color.WHITE);
+					} else if (name.equals("HOLE")) {
+						tiles.get(packet.tileID).setColor(Color.BLACK);
 					} else {
 						if (playerColors.containsKey(name)) {
-							tiles.get(packet.tileID).setColor(
-									colors[playerColors.get(name)]);
+							tiles.get(packet.tileID).setColor(colors[playerColors.get(name)]);
 						} else {
 							playerColors.put(name, playerColors.size());
-							tiles.get(packet.tileID).setColor(
-									colors[playerColors.get(name)]);
+							tiles.get(packet.tileID).setColor(colors[playerColors.get(name)]);
 						}
 					}
 
@@ -170,6 +206,9 @@ public class PlanetView extends ScreenAdapter {
 				}
 			}
 		});
+
+		// Default colors
+		defaultColor();
 	}
 
 	private void drawChunks() {
@@ -178,19 +217,28 @@ public class PlanetView extends ScreenAdapter {
 		}
 	}
 
-	private void partitionColor() {
+	private Chunk getChunkFromTileID(int ID) {
+		Tile t = planet.tiles.get(ID);
 		for (Chunk c : chunks) {
-			Color color = colors[random.nextInt(colors.length)];
-			for (Tile t : c.tiles) {
-				t.setColor(color);
+			if (c.tiles.contains(t)) {
+				return c;
 			}
 		}
+
+		// Returns null if there is no tile with this ID.
+		return null;
 	}
 
-	private void randomize() {
-		for (Tile t : tiles) {
-			t.setColor(colors[random.nextInt(colors.length)]);
+	private void defaultColor() {
+		for (Chunk c : chunks) {
+			for (Tile t : c.tiles) {
+				t.setColor(Color.GRAY);
+				for (int i = 0; i < adjacencies.get(t).size(); ++i) {
+					planet.edges.get(t.edges[i]).setColor(Color.BLACK);
+				}
+			}
 		}
+		drawChunks();
 	}
 
 	@Override
@@ -206,8 +254,7 @@ public class PlanetView extends ScreenAdapter {
 		cam.update();
 		camController.update();
 
-		Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(),
-				Gdx.graphics.getHeight());
+		Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
 
 		modelBatch.begin(cam);
@@ -226,8 +273,7 @@ public class PlanetView extends ScreenAdapter {
 
 		// Draw diagnostics
 		stringBuilder.setLength(0);
-		stringBuilder.append(" FPS: ")
-				.append(Gdx.graphics.getFramesPerSecond());
+		stringBuilder.append(" FPS: ").append(Gdx.graphics.getFramesPerSecond());
 		stringBuilder.append(" Chunks visible: ").append(visibleCount);
 
 		for (String player : playerScores.keySet()) {
@@ -265,8 +311,7 @@ public class PlanetView extends ScreenAdapter {
 			float dist2 = ray.origin.dst2(position);
 			if (distance >= 0f && dist2 > distance)
 				continue;
-			if (Intersector.intersectRaySphere(ray, position,
-					instance.getRadius(), null)) {
+			if (Intersector.intersectRaySphere(ray, position, instance.getRadius(), null)) {
 				result = i;
 				distance = dist2;
 			}
