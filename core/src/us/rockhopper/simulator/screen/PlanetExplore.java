@@ -1,15 +1,7 @@
 package us.rockhopper.simulator.screen;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Random;
-
-import us.rockhopper.simulator.Planet;
-import us.rockhopper.simulator.Planet.Chunk;
-import us.rockhopper.simulator.Planet.EdgePiece;
-import us.rockhopper.simulator.Planet.Plate;
-import us.rockhopper.simulator.Planet.Tile;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input.Buttons;
@@ -32,14 +24,25 @@ import com.badlogic.gdx.math.collision.Ray;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 
+import us.rockhopper.simulator.Planet;
+import us.rockhopper.simulator.Planet.Chunk;
+import us.rockhopper.simulator.Planet.Plate;
+import us.rockhopper.simulator.Planet.Tile;
+
 public class PlanetExplore extends ScreenAdapter {
 
-	public PlanetExplore(Planet planet) {
-		this.tiles = planet.tiles;
-		this.adjacencies = planet.adjacencies;
-		this.chunks = planet.chunks;
-		this.plates = planet.plates;
-		this.edges = planet.edges;
+	ArrayList<Planet> planets;
+
+	public PlanetExplore(Planet... planets) {
+		this.planets = new ArrayList<Planet>();
+		for (Planet p : planets) {
+			this.planets.add(p);
+		}
+		// this.tiles = planet.tiles;
+		// this.adjacencies = planet.adjacencies;
+		// this.chunks = planet.chunks;
+		// this.plates = planet.plates;
+		// this.edges = planet.edges;
 	}
 
 	private final int MINIMUM_CHUNK_SIZE = 200;
@@ -49,12 +52,11 @@ public class PlanetExplore extends ScreenAdapter {
 	public PerspectiveCamera cam;
 	public ModelBatch modelBatch;
 
-	public List<EdgePiece> edges = new ArrayList<EdgePiece>();
-	public List<Tile> tiles = new ArrayList<Tile>();
-	public List<Chunk> chunks = new ArrayList<Chunk>();
-	public List<Plate> plates = new ArrayList<Plate>();
-
-	HashMap<Tile, List<Tile>> adjacencies = new HashMap<Tile, List<Tile>>();
+	// public List<Tile> tiles = new ArrayList<Tile>();
+	// HashMap<Tile, List<Tile>> adjacencies = new HashMap<Tile, List<Tile>>();
+	// public List<Chunk> chunks = new ArrayList<Chunk>();
+	// public List<Plate> plates = new ArrayList<Plate>();
+	// public List<EdgePiece> edges = new ArrayList<EdgePiece>();
 
 	protected Stage stage;
 	protected Label label;
@@ -64,9 +66,8 @@ public class PlanetExplore extends ScreenAdapter {
 	private int selected = -1;
 
 	Random random = new Random();
-	Color colors[] = { Color.BLUE, Color.GREEN, Color.PINK, Color.RED,
-			Color.CYAN, Color.WHITE, Color.YELLOW, Color.ORANGE, Color.GRAY,
-			Color.OLIVE, Color.DARK_GRAY, Color.LIGHT_GRAY };
+	Color colors[] = { Color.BLUE, Color.GREEN, Color.PINK, Color.RED, Color.CYAN, Color.WHITE, Color.YELLOW,
+			Color.ORANGE, Color.GRAY, Color.OLIVE, Color.DARK_GRAY, Color.LIGHT_GRAY };
 
 	@Override
 	public void show() {
@@ -77,15 +78,12 @@ public class PlanetExplore extends ScreenAdapter {
 		stringBuilder = new StringBuilder();
 
 		environment = new Environment();
-		environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.4f,
-				0.4f, 0.4f, 1f));
-		environment.add(new DirectionalLight().set(0.8f, 0.8f, 0.8f, -1f,
-				-0.8f, -0.2f));
+		environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.4f, 0.4f, 0.4f, 1f));
+		environment.add(new DirectionalLight().set(0.8f, 0.8f, 0.8f, -1f, -0.8f, -0.2f));
 
 		modelBatch = new ModelBatch();
 
-		cam = new PerspectiveCamera(67, Gdx.graphics.getWidth(),
-				Gdx.graphics.getHeight());
+		cam = new PerspectiveCamera(67, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 		cam.position.set(10f, 10f, 10f);
 		cam.lookAt(0, 0, 0);
 		cam.near = 1f;
@@ -98,18 +96,20 @@ public class PlanetExplore extends ScreenAdapter {
 		InputMultiplexer multiplexer = new InputMultiplexer();
 		multiplexer.addProcessor(new InputAdapter() {
 
+			// TODO: implement the concept of an "active planet" -- the planet
+			// which is being focused on. This is the one the user can interact
+			// with. Currently only the first planet is active.
 			@Override
-			public boolean touchDown(int screenX, int screenY, int pointer,
-					int button) {
+			public boolean touchDown(int screenX, int screenY, int pointer, int button) {
 				if (button == Buttons.RIGHT) {
 					selected = getObject(screenX, screenY);
 					if (selected != -1) {
 						// Get the tile selected
-						Tile t = tiles.get(selected);
+						Tile t = planets.get(0).tiles.get(selected);
 						t.setColor(Color.BLUE);
 
 						// Update the rendering
-						for (Chunk ch : chunks) {
+						for (Chunk ch : planets.get(0).chunks) {
 							if (ch.tiles.contains(t)) {
 								ch.draw();
 								break;
@@ -136,6 +136,15 @@ public class PlanetExplore extends ScreenAdapter {
 					colorPlates();
 					drawChunks();
 				}
+				// View focus
+				if (keycode == Keys.L) {
+					cam.position.set(planets.get(0).ORIGIN.x + 10f, planets.get(0).ORIGIN.y + 10f,
+							planets.get(0).ORIGIN.z + 10f);
+					camView = planets.get(0).ORIGIN;
+					// cam.lookAt(planets.get(0).ORIGIN);
+					cam.update();
+					// camController = new CameraInputController(cam);
+				}
 				return true;
 			}
 		});
@@ -146,22 +155,25 @@ public class PlanetExplore extends ScreenAdapter {
 	}
 
 	private void drawChunks() {
-		for (Chunk c : chunks) {
-			c.draw();
+		for (Planet p : planets) {
+			for (Chunk c : p.chunks) {
+				c.draw();
+			}
 		}
 	}
 
 	private void colorPlates() {
-		for (Plate p : plates) {
-			Color color = new Color((float) Math.random(),
-					(float) Math.random(), (float) Math.random(), 1f);
+		for (Planet p : planets) {
+			for (Plate plate : p.plates) {
+				Color color = new Color((float) Math.random(), (float) Math.random(), (float) Math.random(), 1f);
 
-			for (Tile t : p.tiles) {
-				t.setColor(color);
-				for (int i = 0; i < adjacencies.get(t).size(); ++i) {
-					Tile adj = adjacencies.get(t).get(i);
-					if (!p.tiles.contains(adj)) {
-						edges.get(t.edges[i]).setColor(Color.RED);
+				for (Tile t : plate.tiles) {
+					t.setColor(color);
+					for (int i = 0; i < p.adjacencies.get(t).size(); ++i) {
+						Tile adj = p.adjacencies.get(t).get(i);
+						if (!plate.tiles.contains(adj)) {
+							p.edges.get(t.edges[i]).setColor(Color.RED);
+						}
 					}
 				}
 			}
@@ -169,20 +181,22 @@ public class PlanetExplore extends ScreenAdapter {
 	}
 
 	private void partitionColor() {
-		for (Chunk c : chunks) {
-			Color color = colors[random.nextInt(colors.length)];
-			for (Tile t : c.tiles) {
-				t.setColor(color);
+		for (Planet p : planets) {
+			for (Chunk c : p.chunks) {
+				Color color = colors[random.nextInt(colors.length)];
+				for (Tile t : c.tiles) {
+					t.setColor(color);
+				}
 			}
 		}
 	}
 
 	private void randomize() {
-		for (Tile t : tiles) {
-			t.setColor(new Color((float) Math.random(), (float) Math.random(),
-					(float) Math.random(), 1f));
+		for (Planet p : planets) {
+			for (Tile t : p.tiles) {
+				t.setColor(new Color((float) Math.random(), (float) Math.random(), (float) Math.random(), 1f));
+			}
 		}
-
 		// for (EdgePiece e : edges) {
 		// e.setColor(new Color((float) Math.random(), (float) Math.random(),
 		// (float) Math.random(), 1f));
@@ -195,15 +209,17 @@ public class PlanetExplore extends ScreenAdapter {
 	}
 
 	int visibleCount;
+	Vector3 camView = new Vector3(0, 0, 0);
 
 	@Override
 	public void render(float delta) {
+
 		// Update
+		cam.lookAt(camView);
 		cam.update();
 		camController.update();
 
-		Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(),
-				Gdx.graphics.getHeight());
+		Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
 
 		modelBatch.begin(cam);
@@ -212,24 +228,27 @@ public class PlanetExplore extends ScreenAdapter {
 
 		// Render all visible chunks
 		visibleCount = 0;
-		for (Chunk c : chunks) {
-			if (chunks.size() < MINIMUM_CHUNK_SIZE || isVisible(cam, c)) {
-				modelBatch.render(c.rendered, environment);
-				visibleCount++;
+		for (Planet p : planets) {
+			for (Chunk c : p.chunks) {
+				if (p.chunks.size() < MINIMUM_CHUNK_SIZE || isVisible(cam, c)) {
+					modelBatch.render(c.rendered, environment);
+					visibleCount++;
+				}
 			}
 		}
 		modelBatch.end();
 
 		// Draw diagnostics
 		stringBuilder.setLength(0);
-		stringBuilder.append(" FPS: ")
-				.append(Gdx.graphics.getFramesPerSecond());
+		stringBuilder.append(" FPS: ").append(Gdx.graphics.getFramesPerSecond());
 		stringBuilder.append(" Chunks visible: ").append(visibleCount);
 
 		label.setText(stringBuilder);
 		stage.draw();
 	}
 
+	// TODO: work with the focused planet--non-focused planets are rendered in
+	// some lower LOD
 	private boolean isVisible(PerspectiveCamera cam, Chunk chunk) {
 		// Get the center of the chunk
 		Tile center = chunk.tiles.get(0);
@@ -250,14 +269,13 @@ public class PlanetExplore extends ScreenAdapter {
 		Ray ray = cam.getPickRay(screenX, screenY);
 		int result = -1;
 		float distance = -1;
-		for (int i = 0; i < tiles.size(); ++i) {
-			final Tile instance = tiles.get(i);
+		for (int i = 0; i < planets.get(0).tiles.size(); ++i) {
+			final Tile instance = planets.get(0).tiles.get(i);
 			Vector3 position = instance.center;
 			float dist2 = ray.origin.dst2(position);
 			if (distance >= 0f && dist2 > distance)
 				continue;
-			if (Intersector.intersectRaySphere(ray, position,
-					instance.getRadius(), null)) {
+			if (Intersector.intersectRaySphere(ray, position, instance.getRadius(), null)) {
 				result = i;
 				distance = dist2;
 			}

@@ -2,11 +2,11 @@ package us.rockhopper.simulator;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Random;
-
-import us.rockhopper.simulator.util.Utility;
 
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
@@ -21,27 +21,27 @@ import com.badlogic.gdx.math.Vector3;
 import com.google.common.collect.Ordering;
 import com.google.common.primitives.Floats;
 
+import us.rockhopper.simulator.util.Utility;
+
 public class Planet {
 	// implements ApplicationListener {
 
-	private final float SCALE = 10f;
+	private final float SCALE;
 	private final float TAO = 1.61803399f;
-	private final float RADIUS = SCALE * 2f * 0.95105f;
+	private final float RADIUS;
 
 	// private final float borderThickness = 0.1f;
 
 	public final long SEED;
 	private final int THREADS = 8;
 	public final int SUBDIVISIONS;
-	private final int[] CHUNK_DIVISIONS = { 1, 1, 1, 12, 42, 162, 642, 642,
-			2562 };
+	private final int[] CHUNK_DIVISIONS = { 1, 1, 1, 12, 42, 162, 642, 642, 2562 };
 
-	private Vector3 ORIGIN = new Vector3(0, 0, 0);
+	public Vector3 ORIGIN = new Vector3(0, 0, 0);
 
 	Random random;
-	Color colors[] = { Color.BLUE, Color.GREEN, Color.PINK, Color.RED,
-			Color.CYAN, Color.WHITE, Color.YELLOW, Color.ORANGE, Color.GRAY,
-			Color.OLIVE, Color.DARK_GRAY, Color.LIGHT_GRAY };
+	Color colors[] = { Color.BLUE, Color.GREEN, Color.PINK, Color.RED, Color.CYAN, Color.WHITE, Color.YELLOW,
+			Color.ORANGE, Color.GRAY, Color.OLIVE, Color.DARK_GRAY, Color.LIGHT_GRAY };
 
 	public List<Vector3> vertices = new ArrayList<Vector3>();
 	public List<Triangle> triangles = new ArrayList<Triangle>();
@@ -60,6 +60,18 @@ public class Planet {
 	private ModelBuilder mb = new ModelBuilder();
 
 	public Planet(int subdivisions) {
+		this.SCALE = 10f;
+		this.RADIUS = SCALE * 2f * 0.95105f;
+		this.SUBDIVISIONS = subdivisions;
+		this.SEED = 0;
+		this.random = new Random(SEED);
+		createPlanet();
+	}
+
+	public Planet(int subdivisions, float scale, Vector3 origin) {
+		this.ORIGIN = origin;
+		this.SCALE = scale;
+		this.RADIUS = SCALE * 2f * 0.95105f;
 		this.SUBDIVISIONS = subdivisions;
 		this.SEED = 0;
 		this.random = new Random(SEED);
@@ -67,6 +79,8 @@ public class Planet {
 	}
 
 	public Planet(int subdivisions, long seed) {
+		this.SCALE = 10f;
+		this.RADIUS = SCALE * 2f * 0.95105f;
 		this.SUBDIVISIONS = subdivisions;
 		this.random = new Random(seed);
 		this.SEED = seed;
@@ -128,8 +142,7 @@ public class Planet {
 			mb.begin();
 			// Draw edge pieces
 			for (Color c : borderMap.keySet()) {
-				MeshPartBuilder mbpBorder = mb.part("border",
-						GL20.GL_TRIANGLES, Usage.Position | Usage.Normal,
+				MeshPartBuilder mbpBorder = mb.part("border", GL20.GL_TRIANGLES, Usage.Position | Usage.Normal,
 						new Material(ColorAttribute.createDiffuse(c)));
 				for (EdgePiece e : borderMap.get(c)) {
 					e.draw(mbpBorder);
@@ -138,24 +151,21 @@ public class Planet {
 
 			// Draw tiles
 			for (Color c : colorMap.keySet()) {
-				MeshPartBuilder mbp = mb.part("tile", GL20.GL_TRIANGLES,
-						Usage.Position | Usage.Normal, new Material(
-								ColorAttribute.createDiffuse(c)));
+				MeshPartBuilder mbp = mb.part("tile", GL20.GL_TRIANGLES, Usage.Position | Usage.Normal,
+						new Material(ColorAttribute.createDiffuse(c)));
 				for (Tile t : colorMap.get(c)) {
 					t.draw(mbp);
 				}
 			}
 
 			// Draw plate indicators
-			MeshPartBuilder mpbP = mb.part("plate", GL20.GL_TRIANGLES,
-					Usage.Position | Usage.Normal,
+			MeshPartBuilder mpbP = mb.part("plate", GL20.GL_TRIANGLES, Usage.Position | Usage.Normal,
 					new Material(ColorAttribute.createDiffuse(Color.PINK)));
 
 			for (Plate p : plates) {
 				for (Tile t : p.tiles) {
 					if (tiles.contains(t)) {
-						Vector3 dir = p.axis.cpy().crs(t.getNormal()).nor()
-								.add(t.center);
+						Vector3 dir = p.axis.cpy().crs(t.getNormal()).nor().add(t.center);
 
 						Vector3 quant = dir.cpy().sub(t.center);
 						float q = quant.dot(dir);
@@ -173,9 +183,9 @@ public class Planet {
 						// t.center.cpy().add(side.cpy().scl(0.5f)),
 						// t.center.cpy().add(side.cpy().scl(-0.5f)), dirProj);
 
-//						mpbP.box(dirProj.x, dirProj.y, dirProj.z, 0.1f, 0.1f,
-//								0.1f);
-//						mpbP.box(dir.x, dir.y, dir.z, 0.1f, 0.1f, 0.1f);
+						// mpbP.box(dirProj.x, dirProj.y, dirProj.z, 0.1f, 0.1f,
+						// 0.1f);
+						// mpbP.box(dir.x, dir.y, dir.z, 0.1f, 0.1f, 0.1f);
 					}
 				}
 			}
@@ -349,8 +359,7 @@ public class Planet {
 			Vector3 v2 = this.vertices[1];
 			Vector3 v3 = this.vertices[2];
 
-			return new Vector3((v1.x + v2.x + v3.x) / 3f,
-					(v1.y + v2.y + v3.y) / 3f, (v1.z + v2.z + v3.z) / 3f);
+			return new Vector3((v1.x + v2.x + v3.x) / 3f, (v1.y + v2.y + v3.y) / 3f, (v1.z + v2.z + v3.z) / 3f);
 		}
 	}
 
@@ -460,22 +469,19 @@ public class Planet {
 			triangles.addAll(threadFaces.get(i));
 		}
 
-		System.out.print(" complete. " + this.vertices.size() + " vertices in "
-				+ (System.currentTimeMillis() - time) + " milliseconds.\n");
+		System.out.print(" complete. " + this.vertices.size() + " vertices in " + (System.currentTimeMillis() - time)
+				+ " milliseconds.\n");
 	}
 
 	private Vector3 midpoint(Vector3 p1, Vector3 p2) {
-		return new Vector3((p1.x + p2.x) / 2f, (p1.y + p2.y) / 2f,
-				(p1.z + p2.z) / 2f);
+		return new Vector3((p1.x + p2.x) / 2f, (p1.y + p2.y) / 2f, (p1.z + p2.z) / 2f);
 	}
 
 	private void createPlanet() {
-		Vector3[] vertices = { new Vector3(1, TAO, 0), new Vector3(-1, TAO, 0),
-				new Vector3(1, -TAO, 0), new Vector3(-1, -TAO, 0),
-				new Vector3(0, 1, TAO), new Vector3(0, -1, TAO),
-				new Vector3(0, 1, -TAO), new Vector3(0, -1, -TAO),
-				new Vector3(TAO, 0, 1), new Vector3(-TAO, 0, 1),
-				new Vector3(TAO, 0, -1), new Vector3(-TAO, 0, -1) };
+		Vector3[] vertices = { new Vector3(1, TAO, 0), new Vector3(-1, TAO, 0), new Vector3(1, -TAO, 0),
+				new Vector3(-1, -TAO, 0), new Vector3(0, 1, TAO), new Vector3(0, -1, TAO), new Vector3(0, 1, -TAO),
+				new Vector3(0, -1, -TAO), new Vector3(TAO, 0, 1), new Vector3(-TAO, 0, 1), new Vector3(TAO, 0, -1),
+				new Vector3(-TAO, 0, -1) };
 
 		// ModelBuilder mb = new ModelBuilder();
 		// mb.begin();
@@ -486,17 +492,13 @@ public class Planet {
 			pentPoints.add(v);
 		}
 
-		String[] vertGroups = { "0 4 8", "0 8 10", "0 10 6", "0 6 1", "0 1 4",
-				"6 10 7", "6 7 11", "6 11 1", "11 7 3", "11 3 9", "11 9 1",
-				"9 4 1", "9 5 4", "9 3 5", "2 10 8", "2 7 10", "2 3 7",
-				"2 5 3", "2 8 5", "5 8 4" };
+		String[] vertGroups = { "0 4 8", "0 8 10", "0 10 6", "0 6 1", "0 1 4", "6 10 7", "6 7 11", "6 11 1", "11 7 3",
+				"11 3 9", "11 9 1", "9 4 1", "9 5 4", "9 3 5", "2 10 8", "2 7 10", "2 3 7", "2 5 3", "2 8 5", "5 8 4" };
 
 		for (String vertKey : vertGroups) {
 			String[] verts = vertKey.split(" ");
-			final Triangle tri = new Triangle(
-					vertices[Integer.parseInt(verts[0])],
-					vertices[Integer.parseInt(verts[1])],
-					vertices[Integer.parseInt(verts[2])]);
+			final Triangle tri = new Triangle(vertices[Integer.parseInt(verts[0])],
+					vertices[Integer.parseInt(verts[1])], vertices[Integer.parseInt(verts[2])]);
 			triangles.add(tri);
 		}
 
@@ -511,8 +513,7 @@ public class Planet {
 		sortTileAdjacencies();
 		generateChunks();
 		generatePlates();
-		System.out.println("Scene completed in "
-				+ (System.currentTimeMillis() - time) + " milliseconds.");
+		System.out.println("Scene completed in " + (System.currentTimeMillis() - time) + " milliseconds.");
 	}
 
 	public void generatePlates() {
@@ -537,24 +538,33 @@ public class Planet {
 		}
 
 		for (int i = 0; i < numPlates; ++i) {
-			Plate plate = new Plate(tiles.get(random.nextInt(tiles.size()))
-					.getNormal(), (float) Math.random());
+			Plate plate = new Plate(tiles.get(random.nextInt(tiles.size())).getNormal(), (float) Math.random());
 			Tile t = toCheck.get(random.nextInt(toCheck.size()));
 			plate.addTile(t);
 			plates.add(plate);
 			toCheck.remove(t);
 		}
 
+		// New alg.
 		int plateIndex = 0;
+		List<Queue<Tile>> plateQueues = new ArrayList<Queue<Tile>>();
 		while (!toCheck.isEmpty()) {
 			Plate p = plates.get(plateIndex);
-			for (Tile t : p.tiles) {
-				boolean shouldBreak = false;
-				for (Tile adj : adjacencies.get(t)) {
+
+			// If there is no queue for this tile
+			if (plateQueues.size() == plateIndex) {
+				// Create the queue
+				Queue<Tile> pTiles = new LinkedList<Tile>();
+
+				// Get all tiles adjacent to the seed tile
+				Tile seed = p.tiles.get(0);
+				for (Tile adj : adjacencies.get(seed)) {
 					if (toCheck.contains(adj)) {
 						toCheck.remove(adj);
 						p.addTile(adj);
-						shouldBreak = true;
+
+						// Add this to the plate-edge queue
+						pTiles.add(adj);
 
 						// Loading bar
 						steps++;
@@ -562,22 +572,83 @@ public class Planet {
 							System.out.print(".");
 							steps = 0;
 						}
-
-						break;
 					}
 				}
-				if (shouldBreak) {
-					break;
+
+				// Add the queue to the queue list
+				plateQueues.add(plateIndex, pTiles);
+			} else {
+				Queue<Tile> pTiles = plateQueues.get(plateIndex);
+				Queue<Tile> newBounds = new LinkedList<Tile>();
+
+				// Get all tiles adjacent to the marked boundary tiles
+				while (!pTiles.isEmpty()) {
+					Tile t = pTiles.poll();
+					for (Tile adj : adjacencies.get(t)) {
+						if (toCheck.contains(adj)) {
+							toCheck.remove(adj);
+							p.addTile(adj);
+
+							// Add this to the plate-edge queue
+							newBounds.add(adj);
+
+							// Loading bar
+							steps++;
+							if (steps >= tenth) {
+								System.out.print(".");
+								steps = 0;
+							}
+						}
+					}
 				}
+				
+				// Update the plate boundary queue.
+				pTiles.clear();
+				pTiles = null;
+				plateQueues.remove(plateIndex);
+				plateQueues.add(plateIndex, newBounds);
 			}
+
+			// Loop through plates by incrementing
 			plateIndex++;
 			if (plateIndex >= numPlates) {
 				plateIndex = 0;
 			}
 		}
 
-		System.out.print(" partitioned in "
-				+ (System.currentTimeMillis() - time) + " milliseconds.\n");
+		// // Old alg.
+		// int plateIndex = 0;
+		// while (!toCheck.isEmpty()) {
+		// Plate p = plates.get(plateIndex);
+		// for (Tile t : p.tiles) {
+		// boolean shouldBreak = false;
+		// for (Tile adj : adjacencies.get(t)) {
+		// if (toCheck.contains(adj)) {
+		// toCheck.remove(adj);
+		// p.addTile(adj);
+		// shouldBreak = true;
+		//
+		// // Loading bar
+		// steps++;
+		// if (steps >= tenth) {
+		// System.out.print(".");
+		// steps = 0;
+		// }
+		//
+		// break;
+		// }
+		// }
+		// if (shouldBreak) {
+		// break;
+		// }
+		// }
+		// plateIndex++;
+		// if (plateIndex >= numPlates) {
+		// plateIndex = 0;
+		// }
+		// }
+
+		System.out.print(" partitioned in " + (System.currentTimeMillis() - time) + " milliseconds.\n");
 	}
 
 	private void generateChunks() {
@@ -622,8 +693,7 @@ public class Planet {
 			}
 		}
 
-		System.out.print(" partitioned in "
-				+ (System.currentTimeMillis() - time) + " milliseconds.\n");
+		System.out.print(" partitioned in " + (System.currentTimeMillis() - time) + " milliseconds.\n");
 	}
 
 	private void sortTileAdjacencies() {
@@ -645,9 +715,8 @@ public class Planet {
 				Ordering<Tile> byDistance = new Ordering<Tile>() {
 					@Override
 					public int compare(Tile t1, Tile t2) {
-						return Floats.compare(midpoint(t.center, t1.center)
-								.dst2(e.center), midpoint(t.center, t2.center)
-								.dst2(e.center));
+						return Floats.compare(midpoint(t.center, t1.center).dst2(e.center),
+								midpoint(t.center, t2.center).dst2(e.center));
 					}
 				};
 
@@ -670,8 +739,7 @@ public class Planet {
 		// further fragment the borders into equilateral triangles and
 		// rectangles, for smooth borders. 4. proceed with the worldbuilding
 
-		System.out.print(" sorted in " + (System.currentTimeMillis() - time)
-				+ " milliseconds.\n");
+		System.out.print(" sorted in " + (System.currentTimeMillis() - time) + " milliseconds.\n");
 	}
 
 	private void getTileAdjacencies() {
@@ -688,8 +756,7 @@ public class Planet {
 			Ordering<Tile> byDistance = new Ordering<Tile>() {
 				@Override
 				public int compare(Tile t1, Tile t2) {
-					return Floats.compare(t1.center.dst2(t.center),
-							t2.center.dst2(t.center));
+					return Floats.compare(t1.center.dst2(t.center), t2.center.dst2(t.center));
 				}
 			};
 
@@ -715,8 +782,7 @@ public class Planet {
 				steps = 0;
 			}
 		}
-		System.out.print(" set in " + (System.currentTimeMillis() - time)
-				+ " milliseconds.\n");
+		System.out.print(" set in " + (System.currentTimeMillis() - time) + " milliseconds.\n");
 	}
 
 	ModelBuilder testMB = new ModelBuilder();
@@ -781,8 +847,7 @@ public class Planet {
 						Ordering<Centroid> byDistance = new Ordering<Centroid>() {
 							@Override
 							public int compare(Centroid v1, Centroid v2) {
-								return Floats.compare(v1.v.dst2(c.v),
-										v2.v.dst2(c.v));
+								return Floats.compare(v1.v.dst2(c.v), v2.v.dst2(c.v));
 							}
 						};
 
@@ -810,8 +875,7 @@ public class Planet {
 			}
 		}
 
-		System.out.print(" processed in " + (System.currentTimeMillis() - time)
-				+ " milliseconds.\n");
+		System.out.print(" processed in " + (System.currentTimeMillis() - time) + " milliseconds.\n");
 
 		threads.clear();
 
@@ -820,8 +884,7 @@ public class Planet {
 		time = System.currentTimeMillis();
 
 		// Launch threads to aid in sorting
-		List<List<Vector3>> splitListVertices = Utility.splitList(vertices,
-				THREADS);
+		List<List<Vector3>> splitListVertices = Utility.splitList(vertices, THREADS);
 
 		final List<List<List<Centroid>>> seenData = new ArrayList<List<List<Centroid>>>();
 		for (int i = 0; i < THREADS; ++i) {
@@ -848,8 +911,7 @@ public class Planet {
 						Ordering<Centroid> byDistance = new Ordering<Centroid>() {
 							@Override
 							public int compare(Centroid v1, Centroid v2) {
-								return Floats.compare(v1.v.dst2(v),
-										v2.v.dst2(v));
+								return Floats.compare(v1.v.dst2(v), v2.v.dst2(v));
 							}
 						};
 
@@ -867,8 +929,7 @@ public class Planet {
 						Centroid last = null;
 						List<Centroid> seen = new ArrayList<Centroid>();
 						while (seen.size() < candidates.size() - 1) {
-							for (int i = 1; i < adjacencies.get(start.id)
-									.size(); ++i) {
+							for (int i = 1; i < adjacencies.get(start.id).size(); ++i) {
 								Centroid c = adjacencies.get(start.id).get(i);
 								if (candidates.contains(c) && !seen.contains(c)) {
 									seen.add(start);
@@ -928,27 +989,27 @@ public class Planet {
 				Vector3 v1 = verts.get(0);
 				Vector3 v1dist = c.cpy().sub(v1).nor().scl(borderThickness);
 				Vector3 v1Interior = v1.cpy().add(v1dist);
-				innerVerts.add(v1Interior);
+				innerVerts.add(v1Interior.cpy().add(ORIGIN));
 
 				Vector3 v2 = verts.get(1);
 				Vector3 v2dist = c.cpy().sub(v2).nor().scl(borderThickness);
 				Vector3 v2Interior = v2.cpy().add(v2dist);
-				innerVerts.add(v2Interior);
+				innerVerts.add(v2Interior.cpy().add(ORIGIN));
 
 				Vector3 v3 = verts.get(2);
 				Vector3 v3dist = c.cpy().sub(v3).nor().scl(borderThickness);
 				Vector3 v3Interior = v3.cpy().add(v3dist);
-				innerVerts.add(v3Interior);
+				innerVerts.add(v3Interior.cpy().add(ORIGIN));
 
 				Vector3 v4 = verts.get(3);
 				Vector3 v4dist = c.cpy().sub(v4).nor().scl(borderThickness);
 				Vector3 v4Interior = v4.cpy().add(v4dist);
-				innerVerts.add(v4Interior);
+				innerVerts.add(v4Interior.cpy().add(ORIGIN));
 
 				Vector3 v5 = verts.get(4);
 				Vector3 v5dist = c.cpy().sub(v5).nor().scl(borderThickness);
 				Vector3 v5Interior = v5.cpy().add(v5dist);
-				innerVerts.add(v5Interior);
+				innerVerts.add(v5Interior.cpy().add(ORIGIN));
 
 				Vector3 v6 = null;
 				Vector3 v6dist = null;
@@ -957,47 +1018,49 @@ public class Planet {
 					v6 = verts.get(5);
 					v6dist = c.cpy().sub(v6).nor().scl(borderThickness);
 					v6Interior = v6.cpy().add(v6dist);
-					innerVerts.add(v6Interior);
+					innerVerts.add(v6Interior.cpy().add(ORIGIN));
 				}
 
 				tile = new Tile(innerVerts, id);
 				id++;
 
+				// TODO this seems like an awful lot of vector copying...
+
 				List<Vector3> edgeVerts = new ArrayList<Vector3>();
-				edgeVerts.add(v1);
-				edgeVerts.add(v1Interior);
-				edgeVerts.add(v2Interior);
-				edgeVerts.add(v2);
+				edgeVerts.add(v1.cpy().add(ORIGIN));
+				edgeVerts.add(v1Interior.cpy().add(ORIGIN));
+				edgeVerts.add(v2Interior.cpy().add(ORIGIN));
+				edgeVerts.add(v2.cpy().add(ORIGIN));
 				EdgePiece p1 = new EdgePiece(edgeVerts, edgeID);
 				edges.add(p1);
 				tile.edges[0] = edgeID;
 				edgeID++;
 				edgeVerts.clear();
 
-				edgeVerts.add(v2);
-				edgeVerts.add(v2Interior);
-				edgeVerts.add(v3Interior);
-				edgeVerts.add(v3);
+				edgeVerts.add(v2.cpy().add(ORIGIN));
+				edgeVerts.add(v2Interior.cpy().add(ORIGIN));
+				edgeVerts.add(v3Interior.cpy().add(ORIGIN));
+				edgeVerts.add(v3.cpy().add(ORIGIN));
 				EdgePiece p2 = new EdgePiece(edgeVerts, edgeID);
 				edges.add(p2);
 				tile.edges[1] = edgeID;
 				edgeID++;
 				edgeVerts.clear();
 
-				edgeVerts.add(v3);
-				edgeVerts.add(v3Interior);
-				edgeVerts.add(v4Interior);
-				edgeVerts.add(v4);
+				edgeVerts.add(v3.cpy().add(ORIGIN));
+				edgeVerts.add(v3Interior.cpy().add(ORIGIN));
+				edgeVerts.add(v4Interior.cpy().add(ORIGIN));
+				edgeVerts.add(v4.cpy().add(ORIGIN));
 				EdgePiece p3 = new EdgePiece(edgeVerts, edgeID);
 				edges.add(p3);
 				tile.edges[2] = edgeID;
 				edgeID++;
 				edgeVerts.clear();
 
-				edgeVerts.add(v4);
-				edgeVerts.add(v4Interior);
-				edgeVerts.add(v5Interior);
-				edgeVerts.add(v5);
+				edgeVerts.add(v4.cpy().add(ORIGIN));
+				edgeVerts.add(v4Interior.cpy().add(ORIGIN));
+				edgeVerts.add(v5Interior.cpy().add(ORIGIN));
+				edgeVerts.add(v5.cpy().add(ORIGIN));
 				EdgePiece p4 = new EdgePiece(edgeVerts, edgeID);
 				edges.add(p4);
 				tile.edges[3] = edgeID;
@@ -1005,30 +1068,30 @@ public class Planet {
 				edgeVerts.clear();
 
 				if (verts.size() == 6) {
-					edgeVerts.add(v5);
-					edgeVerts.add(v5Interior);
-					edgeVerts.add(v6Interior);
-					edgeVerts.add(v6);
+					edgeVerts.add(v5.cpy().add(ORIGIN));
+					edgeVerts.add(v5Interior.cpy().add(ORIGIN));
+					edgeVerts.add(v6Interior.cpy().add(ORIGIN));
+					edgeVerts.add(v6.cpy().add(ORIGIN));
 					EdgePiece p5 = new EdgePiece(edgeVerts, edgeID);
 					edges.add(p5);
 					tile.edges[4] = edgeID;
 					edgeID++;
 					edgeVerts.clear();
 
-					edgeVerts.add(v6);
-					edgeVerts.add(v6Interior);
-					edgeVerts.add(v1Interior);
-					edgeVerts.add(v1);
+					edgeVerts.add(v6.cpy().add(ORIGIN));
+					edgeVerts.add(v6Interior.cpy().add(ORIGIN));
+					edgeVerts.add(v1Interior.cpy().add(ORIGIN));
+					edgeVerts.add(v1.cpy().add(ORIGIN));
 					EdgePiece p6 = new EdgePiece(edgeVerts, edgeID);
 					edges.add(p6);
 					tile.edges[5] = edgeID;
 					edgeID++;
 					edgeVerts.clear();
 				} else {
-					edgeVerts.add(v5);
-					edgeVerts.add(v5Interior);
-					edgeVerts.add(v1Interior);
-					edgeVerts.add(v1);
+					edgeVerts.add(v5.cpy().add(ORIGIN));
+					edgeVerts.add(v5Interior.cpy().add(ORIGIN));
+					edgeVerts.add(v1Interior.cpy().add(ORIGIN));
+					edgeVerts.add(v1.cpy().add(ORIGIN));
 					EdgePiece p5 = new EdgePiece(edgeVerts, edgeID);
 					edges.add(p5);
 					tile.edges[4] = edgeID;
@@ -1040,7 +1103,6 @@ public class Planet {
 			}
 		}
 
-		System.out.print(" grouped in " + (System.currentTimeMillis() - time)
-				+ " milliseconds.\n");
+		System.out.print(" grouped in " + (System.currentTimeMillis() - time) + " milliseconds.\n");
 	}
 }
