@@ -1,91 +1,32 @@
 package us.rockhopper.simulator.surface;
 
-import com.badlogic.gdx.Application.ApplicationType;
-import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.Input;
+import java.util.ArrayList;
+import java.util.Random;
+
 import com.badlogic.gdx.math.Vector3;
-import com.badlogic.gdx.utils.Array;
 
 import us.rockhopper.simulator.Planet;
 
 public class World {
 
-	private Player player;
-	private Map map = new Map();
-	private Array<Wall> walls = new Array<Wall>();
+	private ArrayList<Hex> hexes = new ArrayList<Hex>();
+	private Random random = new Random();
 
 	public World(Planet planet) {
-		player = new Player(this);
-		generateLevel(0);
-	}
-
-	private void generateLevel(int levelNumber) {
-		map.load("Level" + levelNumber + ".map");
-		walls.clear();
-		// Create floor layer
-		for (int y = 0; y < map.getMap().size; y++) {
-			for (int x = 0; x < map.getMap().get(y).length(); x++) {
-				walls.add(new Wall(new Vector3(x, -1, map.getMap().size - y), 1f, 1f));
-			}
-		}
-
-		// Create next layer
-		for (int y = 0; y < map.getMap().size; y++) {
-			for (int x = 0; x < map.getMap().get(y).length(); x++) {
-				if (map.getTile(x, y).equals("S")) {
-					// Set start position
-					player.getCentrePos().set(x, 0.5f, map.getMap().size - y);
-				}
-				if (map.getTile(x, y).equals("W")) {
-					// Generate walls
-					walls.add(new Wall(new Vector3(x, 0, map.getMap().size - y), 1f, 1f));
-				}
+		for (int i = -50; i < 50; ++i) {
+			for (int j = -50; j < 50; ++j) {
+				this.addHex(i, j);
 			}
 		}
 	}
 
-	public void update(float delta) {
-		handleInput(delta);
+	public void addHex(int x, int z) {
+		// Convert axial world coords to render coords
+		Vector3 transpose = new Vector3((x * 0.86603f) + (0.433015f * z), 0, (0.75f * z));
+		hexes.add(new Hex(transpose, 1, 1));
 	}
 
-	// Called by player.tryMove() - returns true if collision with blocking
-	// object, false if collision with non-blocking object
-	public boolean collision() {
-		for (int i = 0; i < walls.size; i++) {
-			if (walls.get(i).bounds.contains(player.getHitBox())) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private void handleInput(float delta) {
-		// Desktop controls
-		if (Gdx.app.getType() == ApplicationType.Desktop) {
-			if (Gdx.input.isKeyPressed(Input.Keys.W))
-				player.moveForward(delta);
-			if (Gdx.input.isKeyPressed(Input.Keys.S))
-				player.moveBackward(delta);
-			if (Gdx.input.isKeyPressed(Input.Keys.LEFT))
-				player.turnLeft(delta);
-			if (Gdx.input.isKeyPressed(Input.Keys.RIGHT))
-				player.turnRight(delta);
-			if (Gdx.input.isKeyPressed(Input.Keys.A))
-				player.strafeLeft(delta);
-			if (Gdx.input.isKeyPressed(Input.Keys.D))
-				player.strafeRight(delta);
-		}
-	}
-
-	public Player getPlayer() {
-		return player;
-	}
-
-	public Map getMap() {
-		return map;
-	}
-
-	public Array<Wall> getWalls() {
-		return walls;
+	public ArrayList<Hex> getHexes() {
+		return this.hexes;
 	}
 }

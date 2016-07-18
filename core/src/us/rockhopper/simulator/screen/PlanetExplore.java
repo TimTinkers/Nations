@@ -1,6 +1,9 @@
 package us.rockhopper.simulator.screen;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.PriorityQueue;
 import java.util.Random;
 
 import com.badlogic.gdx.Gdx;
@@ -26,8 +29,10 @@ import com.badlogic.gdx.scenes.scene2d.ui.Label;
 
 import us.rockhopper.simulator.Planet;
 import us.rockhopper.simulator.Planet.Chunk;
+import us.rockhopper.simulator.Planet.EdgePiece;
 import us.rockhopper.simulator.Planet.Plate;
 import us.rockhopper.simulator.Planet.Tile;
+import us.rockhopper.simulator.util.Utility;
 
 public class PlanetExplore extends ScreenAdapter {
 
@@ -46,6 +51,8 @@ public class PlanetExplore extends ScreenAdapter {
 	}
 
 	private final int MINIMUM_CHUNK_SIZE = 200;
+	private boolean PLATE_DEBUG = false;
+	private boolean DRAW_TILES = true;
 
 	public Environment environment;
 	public CameraInputController camController;
@@ -100,6 +107,17 @@ public class PlanetExplore extends ScreenAdapter {
 			// which is being focused on. This is the one the user can interact
 			// with. Currently only the first planet is active.
 			@Override
+			public boolean mouseMoved(int screenX, int screenY) {
+				selected = getObject(screenX, screenY);
+				if (selected != -1) {
+					// Get the tile selected and set the display elevation
+					Tile t = planets.get(0).tiles.get(selected);
+					mouseElevation = t.getElevation();
+				}
+				return false;
+			}
+
+			@Override
 			public boolean touchDown(int screenX, int screenY, int pointer, int button) {
 				if (button == Buttons.RIGHT) {
 					selected = getObject(screenX, screenY);
@@ -136,6 +154,27 @@ public class PlanetExplore extends ScreenAdapter {
 					colorPlates();
 					drawChunks();
 				}
+				if (keycode == Keys.D) {
+					// Toggle plate debug.
+					PLATE_DEBUG = !PLATE_DEBUG;
+					drawPlates();
+				}
+				if (keycode == Keys.H) {
+					// Hide tiles.
+					DRAW_TILES = !DRAW_TILES;
+				}
+				if (keycode == Keys.E) {
+					colorElevation();
+					drawChunks();
+				}
+				if (keycode == Keys.B) {
+					hideBorders();
+					drawChunks();
+				}
+				if (keycode == Keys.T) {
+					colorBorders();
+					drawChunks();
+				}
 				// View focus
 				if (keycode == Keys.L) {
 					cam.position.set(planets.get(0).ORIGIN.x + 10f, planets.get(0).ORIGIN.y + 10f,
@@ -162,20 +201,171 @@ public class PlanetExplore extends ScreenAdapter {
 		}
 	}
 
+	private void drawPlates() {
+		for (Planet p : planets) {
+			for (Plate plate : p.plates) {
+				plate.drawDebug();
+			}
+		}
+	}
+
+	private void colorBorders() {
+		// Get all tiles in all plates of all planets
+		for (Planet planet : planets) {
+			for (Plate plate : planet.plates) {
+				List<Integer> plateTileIDs = plate.tiles;
+
+				// For every tile in the plate, find its adjacent tiles
+				for (int tileID : plateTileIDs) {
+					Tile tile = planet.tiles.get(tileID);
+					List<Integer> tileAdjacencies = planet.adjacencies.get(tileID);
+
+					// For every adjacent tile not in the same plate
+					for (int i = 0; i < tileAdjacencies.size(); ++i) {
+						int adjID = tileAdjacencies.get(i);
+						if (!plateTileIDs.contains(adjID)) {
+							Tile adj = planet.tiles.get(adjID);
+							
+							// Get the tectonic force between the two tiles
+							Vector3 forceA = tile.getTectonicDirection();
+							Vector3 forceB = adj.getTectonicDirection();
+
+							Vector3 midLineA = adj.center.cpy().sub(tile.center.cpy());
+							Vector3 midLineB = tile.center.cpy().sub(adj.center.cpy());
+
+							float magA = (forceA.dot(midLineA.cpy()) / midLineA.cpy().nor().len());
+							float magB = (forceB.dot(midLineB.cpy()) / midLineB.cpy().nor().len());
+							float combMag = (magA + magB);
+							// System.out.println(forceA + " " + forceB + " x "
+							// + magA + " " + magB + " = " + combMag);
+
+							// Set the edge color to the tectonic force
+							int edgeID = tile.edges[i];
+							EdgePiece edge = planet.edges.get(edgeID);
+
+							// Clamp magnitude.
+							if (combMag > 2f) {
+								combMag = 2f;
+							}
+							if (combMag < -2) {
+								combMag = -2;
+							}
+
+							// Set color of border: mountains green, rifts red
+							Color color = Utility.colorFromHSV((combMag - 2) * -0.1f, 0.9f, 0.9f, 1);
+							edge.setColor(color);
+
+							// Change the elevation based on collision.
+							String typeA = tile.getType();
+							String typeB = adj.getType();
+							if (typeA.equals("land") && typeB.equals("land") && combMag > 0) {
+								float elevationScale = (combMag / 2f);
+								float heightA = tile.getElevation() + (elevationScale * planet.MAX_HEIGHT);
+								float heightB = tile.getElevation() + (elevationScale * planet.MAX_HEIGHT);
+								tile.setElevation(heightA);
+								adj.setElevation(heightB);
+							}
+						}
+					}
+				}
+
+				if (plate.type.equals("land")) {
+					plate.smooth();
+					// return;
+				}
+			}
+		}
+	}
+
+	private void colorElevation() {
+		for (Planet p : planets) {
+
+			for (Tile t : p.tiles) {
+				// Define the color based on type and elevation.
+				Color elevationColor = new Color(0f, 0f, 0f, 1f);
+				String type = t.getType();
+				float elevation = t.getElevation();
+				if (elevation >= 0) { // Land
+					float elevationScale = elevation / p.MAX_HEIGHT;
+					elevationColor = new Color((109 + 62 * elevationScale) / 255f, (97 + 80 * elevationScale) / 255f,
+							(57 + 75 * elevationScale) / 255f, 1f);
+				} else if (elevation < 0) { // Below sea level
+					float elevationScale = elevation / p.MAX_DEPTH;
+					elevationColor = new Color((62 + 73 * elevationScale) / 255f, (72 + 74 * elevationScale) / 255f,
+							(102 + 80 * elevationScale) / 255f, 1f);
+				}
+				t.setColor(elevationColor);
+			}
+
+			// Color in all plates.
+			// for (Plate plate : p.plates) {
+			// int elevation = plate.elevation;
+			// int lowElevation =
+			//
+			// // Define the color based on type and elevation.
+			// Color elevationColor = new Color(0f, 0f, 0f, 1f);
+			// String type = plate.type;
+			// if (type.equals("land")) {
+			// float elevationScale = elevation / 2000f;
+			// elevationColor = new Color((109 + 62 * elevationScale) / 255f,
+			// (97 + 80 * elevationScale) / 255f,
+			// (57 + 75 * elevationScale) / 255f, 1f);
+			// } else if (type.equals("ocean")) {
+			// float elevationScale = elevation / -4000f;
+			// elevationColor = new Color((62 + 73 * elevationScale) / 255f, (72
+			// + 74 * elevationScale) / 255f,
+			// (102 + 80 * elevationScale) / 255f, 1f);
+			// }
+			//
+			// System.out.println(elevationColor.toString());
+			//
+			// for (Tile t : plate.tiles) {
+			// t.setColor(elevationColor);
+			// for (int i = 0; i < p.adjacencies.get(t).size(); ++i) {
+			// Tile adj = p.adjacencies.get(t).get(i);
+			// if (!plate.tiles.contains(adj)) {
+			// p.edges.get(t.edges[i]).setColor(Color.RED);
+			// }
+			// }
+			// }
+			//
+			// // plate.tiles.get(0).setColor(Color.WHITE);
+			// }
+		}
+	}
+
+	private void hideBorders() {
+		// Color in all edges.
+		for (Planet planet : planets) {
+			for (Tile tile : planet.tiles) {
+				int[] tileEdgeIDs = tile.edges;
+				for (int i = 0; i < tileEdgeIDs.length; ++i) {
+					int edgeID = tile.edges[i];
+					planet.edges.get(edgeID).setColor(tile.getColor());
+				}
+			}
+		}
+	}
+
 	private void colorPlates() {
 		for (Planet p : planets) {
+			// Color in all plates.
 			for (Plate plate : p.plates) {
 				Color color = new Color((float) Math.random(), (float) Math.random(), (float) Math.random(), 1f);
 
-				for (Tile t : plate.tiles) {
+				for (int tID : plate.tiles) {
+					Tile t = p.tiles.get(tID);
 					t.setColor(color);
 					for (int i = 0; i < p.adjacencies.get(t).size(); ++i) {
-						Tile adj = p.adjacencies.get(t).get(i);
-						if (!plate.tiles.contains(adj)) {
+						int adjID = p.adjacencies.get(t).get(i);
+						if (!plate.tiles.contains(adjID)) {
 							p.edges.get(t.edges[i]).setColor(Color.RED);
 						}
 					}
 				}
+
+				int centerID = plate.tiles.get(0);
+				p.tiles.get(centerID).setColor(Color.WHITE);
 			}
 		}
 	}
@@ -184,7 +374,8 @@ public class PlanetExplore extends ScreenAdapter {
 		for (Planet p : planets) {
 			for (Chunk c : p.chunks) {
 				Color color = colors[random.nextInt(colors.length)];
-				for (Tile t : c.tiles) {
+				for (int tID : c.tiles) {
+					Tile t = p.tiles.get(tID);
 					t.setColor(color);
 				}
 			}
@@ -209,6 +400,7 @@ public class PlanetExplore extends ScreenAdapter {
 	}
 
 	int visibleCount;
+	float mouseElevation = 0;
 	Vector3 camView = new Vector3(0, 0, 0);
 
 	@Override
@@ -229,10 +421,19 @@ public class PlanetExplore extends ScreenAdapter {
 		// Render all visible chunks
 		visibleCount = 0;
 		for (Planet p : planets) {
-			for (Chunk c : p.chunks) {
-				if (p.chunks.size() < MINIMUM_CHUNK_SIZE || isVisible(cam, c)) {
-					modelBatch.render(c.rendered, environment);
-					visibleCount++;
+			if (DRAW_TILES) {
+				for (Chunk c : p.chunks) {
+					if (p.chunks.size() < MINIMUM_CHUNK_SIZE || isVisible(cam, c)) {
+						modelBatch.render(c.rendered, environment);
+						visibleCount++;
+					}
+				}
+			}
+
+			// Draw plate debugs if on
+			if (PLATE_DEBUG) {
+				for (Plate plate : p.plates) {
+					modelBatch.render(plate.debug, environment);
 				}
 			}
 		}
@@ -242,6 +443,7 @@ public class PlanetExplore extends ScreenAdapter {
 		stringBuilder.setLength(0);
 		stringBuilder.append(" FPS: ").append(Gdx.graphics.getFramesPerSecond());
 		stringBuilder.append(" Chunks visible: ").append(visibleCount);
+		stringBuilder.append(" Tile elevation: ").append(mouseElevation);
 
 		label.setText(stringBuilder);
 		stage.draw();
@@ -251,8 +453,10 @@ public class PlanetExplore extends ScreenAdapter {
 	// some lower LOD
 	private boolean isVisible(PerspectiveCamera cam, Chunk chunk) {
 		// Get the center of the chunk
-		Tile center = chunk.tiles.get(0);
-
+		Planet p = chunk.planet;
+		int centerID = chunk.tiles.get(0);
+		Tile center = p.tiles.get(centerID);
+		
 		// Close-enough occlusion testing. This works so long as the camera
 		// remains fixed to the center of the sphere.
 		if (cam.direction.cpy().nor().dot(center.getNormal()) >= 0) {
@@ -260,7 +464,8 @@ public class PlanetExplore extends ScreenAdapter {
 		}
 
 		// Perform frustum culling
-		Tile furthest = chunk.tiles.get(chunk.tiles.size() - 1);
+		int furthestID = chunk.tiles.get(chunk.tiles.size() - 1);
+		Tile furthest = p.tiles.get(furthestID);
 		float radius = center.center.dst(furthest.center);
 		return cam.frustum.sphereInFrustum(center.center, radius);
 	}

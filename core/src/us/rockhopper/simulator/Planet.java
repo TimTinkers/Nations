@@ -1,10 +1,12 @@
 package us.rockhopper.simulator;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Random;
 
@@ -38,6 +40,9 @@ public class Planet {
 	private final int[] CHUNK_DIVISIONS = { 1, 1, 1, 12, 42, 162, 642, 642, 2562 };
 
 	public Vector3 ORIGIN = new Vector3(0, 0, 0);
+	public final int MAX_HEIGHT = 2000;
+	public final int MAX_DEPTH = 4000;
+	public final float SMOOTHING_FACTOR = 2f;
 
 	Random random;
 	Color colors[] = { Color.BLUE, Color.GREEN, Color.PINK, Color.RED, Color.CYAN, Color.WHITE, Color.YELLOW,
@@ -51,7 +56,7 @@ public class Planet {
 
 	public List<Vector3> pentPoints = new ArrayList<Vector3>();
 
-	public HashMap<Tile, List<Tile>> adjacencies = new HashMap<Tile, List<Tile>>();
+	public HashMap<Integer, List<Integer>> adjacencies = new HashMap<Integer, List<Integer>>();
 
 	public List<Chunk> chunks = new ArrayList<Chunk>();
 
@@ -60,7 +65,7 @@ public class Planet {
 	private ModelBuilder mb = new ModelBuilder();
 
 	public Planet(int subdivisions) {
-		this.SCALE = 10f;
+		this.SCALE = 1f;
 		this.RADIUS = SCALE * 2f * 0.95105f;
 		this.SUBDIVISIONS = subdivisions;
 		this.SEED = 0;
@@ -68,18 +73,18 @@ public class Planet {
 		createPlanet();
 	}
 
-	public Planet(int subdivisions, float scale, Vector3 origin) {
+	public Planet(int subdivisions, long seed, float scale, Vector3 origin) {
 		this.ORIGIN = origin;
 		this.SCALE = scale;
 		this.RADIUS = SCALE * 2f * 0.95105f;
 		this.SUBDIVISIONS = subdivisions;
-		this.SEED = 0;
+		this.SEED = seed;
 		this.random = new Random(SEED);
 		createPlanet();
 	}
 
 	public Planet(int subdivisions, long seed) {
-		this.SCALE = 10f;
+		this.SCALE = 1f;
 		this.RADIUS = SCALE * 2f * 0.95105f;
 		this.SUBDIVISIONS = subdivisions;
 		this.random = new Random(seed);
@@ -88,45 +93,171 @@ public class Planet {
 	}
 
 	public class Plate {
-		public List<Tile> tiles;
+		public List<Integer> tiles;
 		public Vector3 axis;
 		public float rotationAngle;
+		public String type;
+		public int elevation;
+		public ModelInstance debug;
 
-		Plate(Vector3 axis, float rotationAngle) {
+		Plate(Vector3 axis, float rotationAngle, String type, int elevation) {
 			this.axis = axis;
 			this.rotationAngle = rotationAngle;
-			tiles = new ArrayList<Tile>();
+			this.type = type;
+			this.elevation = elevation;
+			tiles = new ArrayList<Integer>();
 		}
 
-		public void addTile(Tile tile) {
-			tiles.add(tile);
+		public void calculateTileTectonics() {
+			for (int tID : tiles) {
+				Tile t = Planet.this.tiles.get(tID);
+				Vector3 tileCenter = t.center;
+				Vector3 tileNormal = t.getNormal();
+
+				// Calculate the plate movement vector around the axis.
+				float u = axis.x;
+				float v = axis.y;
+				float w = axis.z;
+				float x = tileCenter.x;
+				float y = tileCenter.y;
+				float z = tileCenter.z;
+				float a = ORIGIN.x;
+				float b = ORIGIN.y;
+				float c = ORIGIN.z;
+				float L = u * u + v * v + w * w;
+				float oneMinusCosTheta = (1 - (float) Math.cos(rotationAngle));
+				float rootLSinTheta = (float) (Math.sqrt(L) * Math.sin(rotationAngle));
+				float LxCosTheta = (float) (L * x * Math.cos(rotationAngle));
+				float LyCosTheta = (float) (L * y * Math.cos(rotationAngle));
+				float LzCosTheta = (float) (L * z * Math.cos(rotationAngle));
+				float rotatedX = (float) (((a * (v * v + w * w) - u * (b * v + c * w - u * x - v * y - w * z))
+						* oneMinusCosTheta + LxCosTheta + (rootLSinTheta * (-1 * c * v + b * w - w * y + v * z))) / L);
+				float rotatedY = (float) (((b * (u * u + w * w) - v * (a * u + c * w - u * x - v * y - w * z))
+						* oneMinusCosTheta + LyCosTheta + (rootLSinTheta * (c * u - a * w + w * x - u * z))) / L);
+				float rotatedZ = (float) (((c * (u * u + v * v) - w * (a * u + b * v - u * x - v * y - w * z))
+						* oneMinusCosTheta + LzCosTheta + (rootLSinTheta * (-1 * b * u + a * v - v * x + u * y))) / L);
+				Vector3 rotatedVector = new Vector3(rotatedX, rotatedY, rotatedZ);
+
+				// Project the plate movement onto the tiles:
+				// proj_v = v - n(v dot n).
+				Vector3 rSource = tileCenter.cpy().sub(rotatedVector).nor();
+				float dot = rSource.cpy().dot(tileNormal);
+				Vector3 rScale = tileNormal.cpy().scl(dot);
+				Vector3 projection = rSource.cpy().sub(rScale);
+				Vector3 r = tileCenter.cpy().add(projection);
+				t.setTectonicDirection(r);
+			}
+		}
+
+		public void drawDebug() {
+			// Draw plate indicators for each plate.
+			mb.begin();
+			MeshPartBuilder mpbP = mb.part("plate", GL20.GL_TRIANGLES, Usage.Position | Usage.Normal,
+					new Material(ColorAttribute.createDiffuse(Color.PINK)));
+
+			// For every tile in the chunk...
+			for (int tID : tiles) {
+				if (tiles.contains(tID)) {
+
+					Tile t = Planet.this.tiles.get(tID);
+
+					// Project the normal of each face.
+					Vector3 tileCenter = t.center.cpy();
+					Vector3 tileNormal = t.getNormal();
+					Vector3 r = t.getTectonicDirection();
+					mpbP.arrow(tileCenter.x + (tileNormal.x / 10), tileCenter.y + (tileNormal.y / 10),
+							tileCenter.z + (tileNormal.z / 10), r.x + (tileNormal.x / 10), r.y + (tileNormal.y / 10),
+							r.z + (tileNormal.z / 10), 0.2f, 0.2f, 4);
+				}
+			}
+
+			debug = new ModelInstance(mb.end());
+		}
+
+		public void addTile(int tID) {
+			tiles.add(tID);
+		}
+
+		public void smooth() {
+			PriorityQueue<Integer> tileQueue = new PriorityQueue<Integer>(new Comparator<Integer>() {
+
+				@Override
+				public int compare(Integer xID, Integer yID) {
+					Tile x = Planet.this.tiles.get(xID);
+					Tile y = Planet.this.tiles.get(yID);
+					if (x.getElevation() < y.getElevation()) {
+						return 1;
+					}
+					if (x.getElevation() > y.getElevation()) {
+						return -1;
+					}
+					return 0;
+				}
+			});
+			int centerID = tiles.get(0);
+			Tile centerTile = Planet.this.tiles.get(centerID);
+			Vector3 center = centerTile.center.cpy();
+			for (int i = 0; i < tiles.size(); i++) {
+				int tID = tiles.get(tiles.size() - 1 - i);
+				tileQueue.add(tID);
+			}
+
+			System.out.println(tileQueue.size() + " " + tiles.size());
+
+			while (!tileQueue.isEmpty()) {
+				int tID = tileQueue.poll();
+				float elevation = 0;
+				int adjCount = 0;
+				List<Integer> adjacentTiles = adjacencies.get(tID);
+				for (int adjID : adjacentTiles) {
+					if (tiles.contains(adjID)) {
+						Tile adjTile = Planet.this.tiles.get(adjID);
+						float adjElevation = adjTile.getElevation();
+						elevation += adjElevation;
+						adjCount++;
+					}
+				}
+				float avgElevation = (elevation / adjCount);
+
+				Tile t = Planet.this.tiles.get(tID);
+				System.out.println("tile: " + t.getElevation() + " " + avgElevation);
+
+				// System.out.println("avg E: " + avgElevation);
+				t.setElevation(avgElevation);
+				t.setColor(Color.RED);
+				return;
+			}
 		}
 	}
 
 	public class Chunk {
-		public List<Tile> tiles;
+		public List<Integer> tiles;
 		public ModelInstance rendered;
+		public Planet planet;
 
-		Chunk(List<Tile> tiles) {
+		Chunk(List<Integer> tiles, Planet p) {
+			this.planet = p;
 			this.tiles = tiles;
 		}
 
 		public void draw() {
 			// Group the tiles by their interior colors
-			Map<Color, List<Tile>> colorMap = new HashMap<Color, List<Tile>>();
-			for (Tile t : tiles) {
+			Map<Color, List<Integer>> colorMap = new HashMap<Color, List<Integer>>();
+			for (int tID : tiles) {
+				Tile t = Planet.this.tiles.get(tID);
 				if (!colorMap.containsKey(t.color)) {
-					List<Tile> coloredTiles = new ArrayList<Tile>();
-					coloredTiles.add(t);
+					List<Integer> coloredTiles = new ArrayList<Integer>();
+					coloredTiles.add(tID);
 					colorMap.put(t.color, coloredTiles);
 				} else {
-					colorMap.get(t.color).add(t);
+					colorMap.get(t.color).add(tID);
 				}
 			}
 
 			// Group the edge pieces by their colors
 			Map<Color, List<EdgePiece>> borderMap = new HashMap<Color, List<EdgePiece>>();
-			for (Tile t : tiles) {
+			for (int tID : tiles) {
+				Tile t = Planet.this.tiles.get(tID);
 				for (int i : t.edges) {
 					EdgePiece e = edges.get(i);
 					if (!borderMap.containsKey(e.color)) {
@@ -138,8 +269,8 @@ public class Planet {
 					}
 				}
 			}
-
 			mb.begin();
+
 			// Draw edge pieces
 			for (Color c : borderMap.keySet()) {
 				MeshPartBuilder mbpBorder = mb.part("border", GL20.GL_TRIANGLES, Usage.Position | Usage.Normal,
@@ -153,40 +284,9 @@ public class Planet {
 			for (Color c : colorMap.keySet()) {
 				MeshPartBuilder mbp = mb.part("tile", GL20.GL_TRIANGLES, Usage.Position | Usage.Normal,
 						new Material(ColorAttribute.createDiffuse(c)));
-				for (Tile t : colorMap.get(c)) {
+				for (int tID : colorMap.get(c)) {
+					Tile t = Planet.this.tiles.get(tID);
 					t.draw(mbp);
-				}
-			}
-
-			// Draw plate indicators
-			MeshPartBuilder mpbP = mb.part("plate", GL20.GL_TRIANGLES, Usage.Position | Usage.Normal,
-					new Material(ColorAttribute.createDiffuse(Color.PINK)));
-
-			for (Plate p : plates) {
-				for (Tile t : p.tiles) {
-					if (tiles.contains(t)) {
-						Vector3 dir = p.axis.cpy().crs(t.getNormal()).nor().add(t.center);
-
-						Vector3 quant = dir.cpy().sub(t.center);
-						float q = quant.dot(dir);
-						Vector3 q1 = t.getNormal().cpy().scl(q);
-						Vector3 dirProj = dir.cpy().sub(q1);
-
-						Vector3 side = p.axis.cpy();
-
-						// TODO: figure out the rendering of these arrows
-
-						// mpbP.triangle(
-						// t.center.cpy().add(side.cpy().scl(-0.5f)),
-						// t.center.cpy().add(side.cpy().scl(0.5f)), dirProj);
-						// mpbP.triangle(
-						// t.center.cpy().add(side.cpy().scl(0.5f)),
-						// t.center.cpy().add(side.cpy().scl(-0.5f)), dirProj);
-
-						// mpbP.box(dirProj.x, dirProj.y, dirProj.z, 0.1f, 0.1f,
-						// 0.1f);
-						// mpbP.box(dir.x, dir.y, dir.z, 0.1f, 0.1f, 0.1f);
-					}
 				}
 			}
 
@@ -260,6 +360,10 @@ public class Planet {
 
 	public class Tile {
 		public Vector3 center;
+		private Vector3 tectonicDirection;
+		private String type;
+		private float totalElevation;
+		private int elevationSums;
 		List<Vector3> vertices;
 		Color color;
 		public int id;
@@ -291,6 +395,31 @@ public class Planet {
 					vertices.add(verts.get(i - 1));
 				}
 			}
+		}
+
+		public String getType() {
+			return this.type;
+		}
+
+		public void setType(String type) {
+			this.type = type;
+		}
+
+		public float getElevation() {
+			return this.totalElevation / this.elevationSums;
+		}
+
+		public void setElevation(float elevation) {
+			this.totalElevation = elevation;
+			this.elevationSums = 1;
+		}
+
+		public Vector3 getTectonicDirection() {
+			return this.tectonicDirection.cpy();
+		}
+
+		public void setTectonicDirection(Vector3 r) {
+			this.tectonicDirection = r;
 		}
 
 		public void draw(MeshPartBuilder middle) {
@@ -341,7 +470,16 @@ public class Planet {
 			Vector3 axisX = b.cpy().sub(a).nor();
 			Vector3 axisY = c.cpy().sub(a).nor();
 			Vector3 normal = axisX.crs(axisY);
-			return normal;
+			return normal.nor();
+		}
+
+		public Color getColor() {
+			return this.color;
+		}
+
+		public void addElevation(float elevation) {
+			this.totalElevation += elevation;
+			this.elevationSums++;
 		}
 	}
 
@@ -513,7 +651,29 @@ public class Planet {
 		sortTileAdjacencies();
 		generateChunks();
 		generatePlates();
+		calculateTectonics();
 		System.out.println("Scene completed in " + (System.currentTimeMillis() - time) + " milliseconds.");
+	}
+
+	public void calculateTectonics() {
+		System.out.print("Calculating tectonics");
+		long time = System.currentTimeMillis();
+		int total = plates.size();
+		int tenth = total / 10;
+		int steps = 0;
+
+		for (Plate plate : plates) {
+			plate.calculateTileTectonics();
+
+			// Loading bar
+			steps++;
+			if (steps >= tenth) {
+				System.out.print(".");
+				steps = 0;
+			}
+		}
+
+		System.out.print(" calculated in " + (System.currentTimeMillis() - time) + " milliseconds.\n");
 	}
 
 	public void generatePlates() {
@@ -538,9 +698,23 @@ public class Planet {
 		}
 
 		for (int i = 0; i < numPlates; ++i) {
-			Plate plate = new Plate(tiles.get(random.nextInt(tiles.size())).getNormal(), (float) Math.random());
+			Vector3 axis = tiles.get(random.nextInt(tiles.size())).getNormal();
+			float rotAngle = (float) Math.random() * 100f;
+			String type = "ocean";
+			// int elevation = -1 * random.nextInt(MAX_DEPTH);
+			// TODO: make random
+			int elevation = -1000;
+			if (Math.random() < 0.99) {
+				type = "land";
+				// elevation = random.nextInt(MAX_HEIGHT);
+				elevation = 1000;
+			}
+			System.out.println(type + " plate with elevation " + elevation);
+			Plate plate = new Plate(axis, rotAngle, type, elevation);
 			Tile t = toCheck.get(random.nextInt(toCheck.size()));
-			plate.addTile(t);
+			t.setType(type);
+			t.setElevation(elevation);
+			plate.addTile(t.id);
 			plates.add(plate);
 			toCheck.remove(t);
 		}
@@ -557,14 +731,17 @@ public class Planet {
 				Queue<Tile> pTiles = new LinkedList<Tile>();
 
 				// Get all tiles adjacent to the seed tile
-				Tile seed = p.tiles.get(0);
-				for (Tile adj : adjacencies.get(seed)) {
-					if (toCheck.contains(adj)) {
-						toCheck.remove(adj);
-						p.addTile(adj);
+				int seedID = p.tiles.get(0);
+				for (int adjID : adjacencies.get(seedID)) {
+					Tile adjTile = Planet.this.tiles.get(adjID);
+					if (toCheck.contains(adjTile)) {
+						toCheck.remove(adjTile);
+						adjTile.setType(p.type);
+						adjTile.setElevation(p.elevation);
+						p.addTile(adjID);
 
 						// Add this to the plate-edge queue
-						pTiles.add(adj);
+						pTiles.add(adjTile);
 
 						// Loading bar
 						steps++;
@@ -584,13 +761,16 @@ public class Planet {
 				// Get all tiles adjacent to the marked boundary tiles
 				while (!pTiles.isEmpty()) {
 					Tile t = pTiles.poll();
-					for (Tile adj : adjacencies.get(t)) {
-						if (toCheck.contains(adj)) {
-							toCheck.remove(adj);
-							p.addTile(adj);
+					for (int adjID : adjacencies.get(t.id)) {
+						Tile adjTile = Planet.this.tiles.get(adjID);
+						if (toCheck.contains(adjTile)) {
+							toCheck.remove(adjTile);
+							adjTile.setType(p.type);
+							adjTile.setElevation(p.elevation);
+							p.addTile(adjID);
 
 							// Add this to the plate-edge queue
-							newBounds.add(adj);
+							newBounds.add(adjTile);
 
 							// Loading bar
 							steps++;
@@ -601,7 +781,7 @@ public class Planet {
 						}
 					}
 				}
-				
+
 				// Update the plate boundary queue.
 				pTiles.clear();
 				pTiles = null;
@@ -615,38 +795,6 @@ public class Planet {
 				plateIndex = 0;
 			}
 		}
-
-		// // Old alg.
-		// int plateIndex = 0;
-		// while (!toCheck.isEmpty()) {
-		// Plate p = plates.get(plateIndex);
-		// for (Tile t : p.tiles) {
-		// boolean shouldBreak = false;
-		// for (Tile adj : adjacencies.get(t)) {
-		// if (toCheck.contains(adj)) {
-		// toCheck.remove(adj);
-		// p.addTile(adj);
-		// shouldBreak = true;
-		//
-		// // Loading bar
-		// steps++;
-		// if (steps >= tenth) {
-		// System.out.print(".");
-		// steps = 0;
-		// }
-		//
-		// break;
-		// }
-		// }
-		// if (shouldBreak) {
-		// break;
-		// }
-		// }
-		// plateIndex++;
-		// if (plateIndex >= numPlates) {
-		// plateIndex = 0;
-		// }
-		// }
 
 		System.out.print(" partitioned in " + (System.currentTimeMillis() - time) + " milliseconds.\n");
 	}
@@ -664,21 +812,22 @@ public class Planet {
 		// Seed the regions
 		for (int i = 0; i < CHUNK_DIVISIONS[SUBDIVISIONS]; ++i) {
 			Tile p = tiles.get(i);
-			List<Tile> region = new ArrayList<Tile>();
-			region.add(p);
-			chunks.add(new Chunk(region));
+			List<Integer> region = new ArrayList<Integer>();
+			region.add(p.id);
+			chunks.add(new Chunk(region, this));
 			toCheck.remove(p);
 		}
 
 		while (!toCheck.isEmpty()) {
 			for (Chunk c : chunks) {
-				List<Tile> newRegion = new ArrayList<Tile>();
-				for (Tile t : c.tiles) {
-					List<Tile> adj = adjacencies.get(t);
-					for (Tile a : adj) {
+				List<Integer> newRegion = new ArrayList<Integer>();
+				for (int tID : c.tiles) {
+					List<Integer> adjIDs = adjacencies.get(tID);
+					for (int aID : adjIDs) {
+						Tile a = Planet.this.tiles.get(aID);
 						if (toCheck.contains(a)) {
 							toCheck.remove(a);
-							newRegion.add(a);
+							newRegion.add(a.id);
 
 							// Loading bar
 							steps++;
@@ -706,25 +855,27 @@ public class Planet {
 		// Organize the adjacency list so that it properly keys to the EdgePiece
 		// array
 		for (final Tile t : tiles) {
-			List<Tile> sortedAdjacencies = new ArrayList<Tile>();
+			List<Integer> sortedAdjacencies = new ArrayList<Integer>();
 			for (int i : t.edges) {
 				final EdgePiece e = edges.get(i);
 
 				// Find which midpoint-with-adjacent-tile is closest to the
 				// center of this EdgePiece, for each EdgePiece.
-				Ordering<Tile> byDistance = new Ordering<Tile>() {
+				Ordering<Integer> byDistance = new Ordering<Integer>() {
 					@Override
-					public int compare(Tile t1, Tile t2) {
+					public int compare(Integer t1ID, Integer t2ID) {
+						Tile t1 = Planet.this.tiles.get(t1ID);
+						Tile t2 = Planet.this.tiles.get(t2ID);
 						return Floats.compare(midpoint(t.center, t1.center).dst2(e.center),
 								midpoint(t.center, t2.center).dst2(e.center));
 					}
 				};
 
-				List<Tile> adj = new ArrayList<Tile>();
-				adj = byDistance.leastOf(adjacencies.get(t), 1);
+				List<Integer> adj = new ArrayList<Integer>();
+				adj = byDistance.leastOf(adjacencies.get(t.id), 1);
 				sortedAdjacencies.add(adj.get(0));
 			}
-			adjacencies.put(t, sortedAdjacencies);
+			adjacencies.put(t.id, sortedAdjacencies);
 
 			// Loading bar
 			steps++;
@@ -766,7 +917,11 @@ public class Planet {
 			} else {
 				adj = byDistance.leastOf(tiles, 7);
 			}
-			adjacencies.put(t, adj);
+			List<Integer> adjIDs = new ArrayList<Integer>();
+			for (Tile sortedT : adj) {
+				adjIDs.add(sortedT.id);
+			}
+			adjacencies.put(t.id, adjIDs);
 
 			// // TODO: fix this when switching over to mapping with strictly
 			// IDs

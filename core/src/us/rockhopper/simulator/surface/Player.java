@@ -1,139 +1,55 @@
 package us.rockhopper.simulator.surface;
 
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.InputMultiplexer;
+import com.badlogic.gdx.graphics.PerspectiveCamera;
 import com.badlogic.gdx.math.Vector3;
 
 public class Player {
 
-	private World world;
+	// Camera
+	public PerspectiveCamera camera;
+	public PlayerCameraController camController;
 
-	// Character dimensions
-	private float width = 1f;
-	private float height = 2f;
-	private float depth = 1f;
-	private Vector3 centrePos = new Vector3(0.0f, 0.5f, 0.0f);
+	// Physical properties
+	private Vector3 position;
+	private float height;
+	private float width;
+	private float depth;
 
-	private Hitbox hitbox = new Hitbox(centrePos, width, height, depth);
+	// TODO test gravity
+	private Vector3 gravity = new Vector3(0, -1, 0);
 
-	private float rotation = 0.0f;
-	private float rotationModifier;
+	public Player() {
+		this.position = new Vector3(0, 0, 0);
+		this.height = 2f;
+		this.width = 1f;
+		this.depth = 1f;
 
-	private float speed = 3.0f;
-	private Vector3 velocity = new Vector3(0.0f, 0.0f, 0.0f);
+		// Camera
+		camera = new PerspectiveCamera(67, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+		camera.position.set(0f, 2f, 0f);
+		camera.near = 0.5f;
+		camera.far = 1000f;
+		camera.update();
+		camController = new PlayerCameraController(camera);
 
-	public Player(World world) {
-		this.world = world;
+		// Initialize input processing
+		InputMultiplexer multiplexer = new InputMultiplexer();
+		multiplexer.addProcessor(camController);
+		Gdx.input.setInputProcessor(multiplexer);
 	}
 
-	public void moveForward(float delta) {
-		velocity.set(-(float) (Math.sin(Math.toRadians(getRotation())) * speed), 0,
-				-(float) (Math.cos(Math.toRadians(getRotation())) * speed));
-		rotationModifier = 0;
-		tryMove(delta);
+	public void setPosition(Vector3 pos) {
+		this.position = pos;
 	}
 
-	public void moveBackward(float delta) {
-		velocity.set((float) (Math.sin(Math.toRadians(getRotation())) * speed), 0,
-				(float) (Math.cos(Math.toRadians(getRotation())) * speed));
-		rotationModifier = 0;
-		tryMove(delta);
+	public Vector3 getPosition() {
+		return this.position.cpy();
 	}
 
-	public void strafeLeft(float delta) {
-		velocity.set(-(float) (Math.cos(Math.toRadians(getRotation())) * speed), 0,
-				(float) (Math.sin(Math.toRadians(getRotation())) * speed));
-		rotationModifier = 0;
-		tryMove(delta);
-	}
-
-	public void strafeRight(float delta) {
-		velocity.set((float) (Math.cos(Math.toRadians(getRotation())) * speed), 0,
-				-(float) (Math.sin(Math.toRadians(getRotation())) * speed));
-		rotationModifier = 0;
-		tryMove(delta);
-	}
-
-	public void turnLeft(float delta) {
-		velocity.set(0.0f, 0.0f, 0.0f);
-		rotationModifier = speed * 50 * delta;
-		tryMove(delta);
-	}
-
-	public void turnRight(float delta) {
-		velocity.set(0.0f, 0.0f, 0.0f);
-		rotationModifier = speed * -50 * delta;
-		tryMove(delta);
-	}
-
-	public void stopMoving() {
-		velocity.set(0.0f, 0.0f, 0.0f);
-		rotationModifier = 0;
-	}
-
-	private void tryMove(float delta) {
-		// create temporary backups of centrePos, velocity, and rotation...
-		Vector3 centrePosBackup = new Vector3(centrePos);
-		Vector3 velocityBackup = new Vector3(velocity);
-		float rotationBackup = getRotation();
-		// apply movement
-		centrePos.add(velocity.x * delta, velocity.y * delta, velocity.z * delta);
-		setRotation(getRotation() + rotationModifier);
-		hitbox.updateBounds(getRotation());
-		// if blocking collision at new position...
-		if (world.collision()) {
-			// ...undo move
-			centrePos = centrePosBackup;
-			velocity = velocityBackup;
-			setRotation(rotationBackup);
-			hitbox.updateBounds(getRotation());
-		}
-	}
-
-	public void setRotation(float rotation) {
-		this.rotation = rotation;
-	}
-
-	public Vector3 getCentrePos() {
-		// System.out.println("get: " + centrePos.y);
-		return centrePos;
-	}
-
-	// public Vector2 getHitboxFrontRight() {
-	// return hitboxFrontRight;
-	// }
-	//
-	// public Vector2 getHitboxBackRight() {
-	// return hitboxBackRight;
-	// }
-	//
-	// public Vector2 getHitboxBackLeft() {
-	// return hitboxBackLeft;
-	// }
-	//
-	// public Vector2 getHitboxFrontLeft() {
-	// return hitboxFrontLeft;
-	// }
-
-	public float getWidth() {
-		return width;
-	}
-
-	public float getHeight() {
-		return height;
-	}
-	
-	public float getDepth() {
-		return depth;
-	}
-
-	public float getRotation() {
-		return rotation;
-	}
-
-	public float getRotationModifier() {
-		return rotationModifier;
-	}
-
-	public Hitbox getHitBox() {
-		return this.hitbox;
+	public void update() {
+		setPosition(camera.position.cpy().sub(new Vector3(0f, 1.5f, 0f)));
+		camController.update(position);
 	}
 }
